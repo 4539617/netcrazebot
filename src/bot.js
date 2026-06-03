@@ -1,4 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { config } from './config.js';
 import { resolveDomain, resolveMultipleDomains } from './dnsResolver.js';
 import {
@@ -8,6 +10,8 @@ import {
   generateMultipleDomainsFilename
 } from './fileGenerator.js';
 import { AntiFlood } from './antiflood.js';
+
+const execAsync = promisify(exec);
 import { processBatFile } from './batFileProcessor.js';
 import { processAwgConfig } from './awgConverter.js';
 import { AWGManager } from './awgManager.js';
@@ -27,6 +31,8 @@ export class RouteBot {
     this.awgManager = new AWGManager();
     // Install sessions storage
     this.installSessions = new Map();
+    // VPS label sessions storage
+    this.vpsLabelSessions = new Map();
     this.setupHandlers();
     logger.info('RouteBot initialized');
   }
@@ -145,9 +151,9 @@ google.com
         }
         
         if (data === 'awg_gen_v1') {
-          await this.generateAwgConfig(chatId, 'v1');
+          await this.requestVpsLabel(chatId, 'v1');
         } else if (data === 'awg_gen_v2') {
-          await this.generateAwgConfig(chatId, 'v2');
+          await this.requestVpsLabel(chatId, 'v2');
         } else if (data === 'awg_stats') {
           await this.showAwgStats(chatId);
         } else if (data === 'awg_clients') {
@@ -156,6 +162,57 @@ google.com
           const version = data.replace('awg_clients_', '');
           await this.showAwgClientsList(chatId, version);
         }
+      }
+      // Resend config callbacks
+      else if (data.startsWith('resend_')) {
+        await this.bot.answerCallbackQuery(query.id);
+        
+        // Verify admin access
+        if (!this.isAdmin(userId)) {
+          logger.warn(`Unauthorized resend callback from user ${userId}`);
+          return;
+        }
+        
+        // Parse: resend_v1_10.8.1.1
+        const parts = data.split('_');
+        const version = parts[1];
+        const ip = parts.slice(2).join('.');
+        
+        await this.resendClientConfig(chatId, version, ip);
+      }
+      // Delete client callbacks
+      else if (data.startsWith('delete_')) {
+        await this.bot.answerCallbackQuery(query.id);
+        
+        // Verify admin access
+        if (!this.isAdmin(userId)) {
+          logger.warn(`Unauthorized delete callback from user ${userId}`);
+          return;
+        }
+        
+        // Parse: delete_v1_10.8.1.1
+        const parts = data.split('_');
+        const version = parts[1];
+        const ip = parts.slice(2).join('.');
+        
+        await this.deleteClientConfig(chatId, version, ip);
+      }
+      // Confirm delete callbacks
+      else if (data.startsWith('confirm_delete_')) {
+        await this.bot.answerCallbackQuery(query.id);
+        
+        // Verify admin access
+        if (!this.isAdmin(userId)) {
+          logger.warn(`Unauthorized confirm delete callback from user ${userId}`);
+          return;
+        }
+        
+        // Parse: confirm_delete_v1_10.8.1.1
+        const parts = data.replace('confirm_delete_', '').split('_');
+        const version = parts[0];
+        const ip = parts.slice(1).join('.');
+        
+        await this.confirmDeleteClient(chatId, version, ip);
       }
       // Install callbacks
       else if (data.startsWith('install_')) {
@@ -224,6 +281,13 @@ google.com
       const session = this.installSessions.get(userId);
       if (session && session.step === 'port_selection') {
         await this.handlePortInput(chatId, userId, text);
+        return;
+      }
+
+      // Check if user is in VPS label input mode
+      const vpsSession = this.vpsLabelSessions.get(userId);
+      if (vpsSession && vpsSession.waitingForLabel) {
+        await this.handleVpsLabelInput(chatId, userId, text, vpsSession.version);
         return;
       }
 
@@ -563,7 +627,68 @@ google.com
     }
   }
 
-  async generateAwgConfig(chatId, version) {
+  async requestVpsLabel(chatId, version) {
+    try {
+      logger.info(`Requesting VPS label for ${version} from chat ${chatId}`);
+      
+      // Сохраняем сессию
+      this.vpsLabelSessions.set(chatId, {
+        waitingForLabel: true,
+        version: version
+      });
+      
+      await this.bot.sendMessage(
+        chatId,
+        `📝 *Введите метку VPS сервера*\n\n` +
+        `Например: \`JONS\`, \`SERVER1\`, \`VPS-NY\`\n\n` +
+        `Эта метка будет добавлена к имени файла конфигурации.\n` +
+        `Пример: \`JONS_AWGv1_10_8_1_1.conf\``,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      logger.error(`Error requesting VPS label for chat ${chatId}:`, error);
+      this.bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  }
+
+  async handleVpsLabelInput(chatId, userId, label, version) {
+    try {
+      // Очищаем сессию
+      this.vpsLabelSessions.delete(userId);
+      
+      // Валидация метки
+      const cleanLabel = label.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      
+      if (!cleanLabel || cleanLabel.length === 0) {
+        await this.bot.sendMessage(
+          chatId,
+          `❌ Некорректная метка. Используйте только буквы, цифры, дефис и подчеркивание.\n\n` +
+          `Попробуйте снова через /admin → Конфигурации`
+        );
+        return;
+      }
+      
+      if (cleanLabel.length > 20) {
+        await this.bot.sendMessage(
+          chatId,
+          `❌ Метка слишком длинная (максимум 20 символов).\n\n` +
+          `Попробуйте снова через /admin → Конфигурации`
+        );
+        return;
+      }
+      
+      logger.info(`VPS label accepted: ${cleanLabel} for ${version} from chat ${chatId}`);
+      
+      // Генерируем конфигурацию с меткой
+      await this.generateAwgConfig(chatId, version, cleanLabel);
+      
+    } catch (error) {
+      logger.error(`Error handling VPS label input for chat ${chatId}:`, error);
+      this.bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  }
+
+  async generateAwgConfig(chatId, version, vpsLabel = null) {
     try {
       logger.info(`Generating AWG ${version} config for chat ${chatId}`);
       
@@ -588,7 +713,7 @@ google.com
       );
 
       // Generate config
-      const result = await this.awgManager.generateClientConfig(version);
+      const result = await this.awgManager.generateClientConfig(version, vpsLabel);
 
       // Delete processing message
       await this.bot.deleteMessage(chatId, processingMsg.message_id);
@@ -719,11 +844,204 @@ google.com
       clientsMessage += `📦 Контейнер: \`${container.name}\`\n`;
       clientsMessage += `Всего: ${clients.length}\n\n`;
       
+      // Создаём кнопки для каждого клиента
+      const keyboard = {
+        inline_keyboard: []
+      };
+      
       clients.forEach((ip, index) => {
         clientsMessage += `${index + 1}. \`${ip}\`\n`;
+        
+        // Добавляем кнопки для каждого IP
+
+  async resendClientConfig(chatId, version, ip) {
+    try {
+      logger.info(`Resending config for ${ip} (${version}) to chat ${chatId}`);
+      
+      const processingMsg = await this.bot.sendMessage(
+        chatId,
+        `⏳ Восстанавливаю конфигурацию для \`${ip}\`...`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      // Initialize AWG manager if needed
+      if (!this.awgManager.initialized) {
+        await this.awgManager.initialize();
+      }
+      
+      // Find container by version
+      const container = this.awgManager.availableContainers.find(c => c.version === version);
+      
+      if (!container) {
+        await this.bot.deleteMessage(chatId, processingMsg.message_id);
+        this.bot.sendMessage(
+          chatId,
+          `❌ Контейнер версии ${version} не найден`
+        );
+        return;
+      }
+      
+      // Regenerate config
+      const result = await this.awgManager.regenerateClientConfig(container.name, ip);
+      
+      // Delete processing message
+      await this.bot.deleteMessage(chatId, processingMsg.message_id);
+      
+      // Send config file
+      await this.bot.sendDocument(chatId, result.filepath);
+      logger.info(`Resent config to chat ${chatId}: ${result.filename}`);
+      
+      this.bot.sendMessage(
+        chatId,
+        `✅ Конфигурация для \`${ip}\` отправлена повторно`,
+        { parse_mode: 'Markdown' }
+      );
+      
+    } catch (error) {
+      logger.error(`Error resending config for ${ip}:`, error);
+      this.bot.sendMessage(
+        chatId,
+        `❌ Ошибка при восстановлении конфигурации:\n${error.message}\n\n` +
+        `Возможные причины:\n` +
+        `• Оригинальный файл конфигурации был удалён\n` +
+        `• Клиент был удалён с сервера\n\n` +
+        `Попробуйте создать новую конфигурацию через /admin → Конфигурации`
+      );
+    }
+  }
+
+  async deleteClientConfig(chatId, version, ip) {
+    try {
+      logger.info(`Delete request for ${ip} (${version}) from chat ${chatId}`);
+      
+      // Запрашиваем подтверждение
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '✅ Да, удалить', callback_data: `confirm_delete_${version}_${ip}` },
+            { text: '❌ Отмена', callback_data: `awg_clients_${version}` }
+          ]
+        ]
+      };
+      
+      this.bot.sendMessage(
+        chatId,
+        `⚠️ *Подтверждение удаления*\n\n` +
+        `Вы уверены что хотите удалить клиента \`${ip}\` из ${version.toUpperCase()}?\n\n` +
+
+  async confirmDeleteClient(chatId, version, ip) {
+    try {
+      logger.info(`Confirming delete for ${ip} (${version}) from chat ${chatId}`);
+      
+      const processingMsg = await this.bot.sendMessage(
+        chatId,
+        `⏳ Удаляю клиента \`${ip}\`...`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      // Initialize AWG manager if needed
+      if (!this.awgManager.initialized) {
+        await this.awgManager.initialize();
+      }
+      
+      // Find container by version
+      const container = this.awgManager.availableContainers.find(c => c.version === version);
+      
+      if (!container) {
+        await this.bot.deleteMessage(chatId, processingMsg.message_id);
+        this.bot.sendMessage(
+          chatId,
+          `❌ Контейнер версии ${version} не найден`
+        );
+        return;
+      }
+      
+      // Delete peer from server config
+      const configPath = container.configPath;
+      const configFile = version === 'v2' ? 'awg0.conf' : 'wg0.conf';
+      
+      // Remove peer section for this IP
+      await this.bot.deleteMessage(chatId, processingMsg.message_id);
+      
+      try {
+        // Read current config
+        const { stdout: currentConfig } = await execAsync(
+          `docker exec ${container.name} cat ${configPath}`
+        );
+        
+        // Remove peer section for this IP
+        const peerRegex = new RegExp(
+          `\\[Peer\\][\\s\\S]*?AllowedIPs\\s*=\\s*${ip.replace(/\./g, '\\.')}\\/32[\\s\\S]*?(?=\\[Peer\\]|$)`,
+          'g'
+        );
+        
+        const newConfig = currentConfig.replace(peerRegex, '');
+        
+        // Write new config
+        const tempFile = `/tmp/awg_config_${Date.now()}.conf`;
+        await execAsync(`echo '${newConfig.replace(/'/g, "'\\''")}' > ${tempFile}`);
+        await execAsync(`docker cp ${tempFile} ${container.name}:${configPath}`);
+        await execAsync(`rm ${tempFile}`);
+        
+        // Restart WireGuard interface
+        await execAsync(`docker exec ${container.name} wg-quick down ${configFile.replace('.conf', '')} || true`);
+        await execAsync(`docker exec ${container.name} wg-quick up ${configFile.replace('.conf', '')}`);
+        
+        logger.info(`Successfully deleted client ${ip} from ${container.name}`);
+        
+        this.bot.sendMessage(
+          chatId,
+          `✅ Клиент \`${ip}\` успешно удалён из ${version.toUpperCase()}\n\n` +
+          `IP адрес освобождён и может быть использован для нового клиента`,
+          { parse_mode: 'Markdown' }
+        );
+        
+      } catch (error) {
+        logger.error(`Error deleting client ${ip}:`, error);
+        this.bot.sendMessage(
+          chatId,
+          `❌ Ошибка при удалении клиента:\n${error.message}\n\n` +
+          `Попробуйте удалить вручную через:\n` +
+          `\`docker exec ${container.name} wg set wg0 peer <PUBLIC_KEY> remove\``
+        );
+      }
+      
+    } catch (error) {
+      logger.error(`Error in confirmDeleteClient for ${ip}:`, error);
+      this.bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  }
+
+        `Это действие:\n` +
+        `• Удалит клиента из конфигурации сервера\n` +
+        `• Освободит IP адрес\n` +
+        `• Клиент больше не сможет подключиться\n\n` +
+        `⚠️ Файл конфигурации останется на сервере для возможности восстановления`,
+        { parse_mode: 'Markdown', reply_markup: keyboard }
+      );
+      
+    } catch (error) {
+      logger.error(`Error showing delete confirmation for ${ip}:`, error);
+      this.bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  }
+
+        keyboard.inline_keyboard.push([
+          {
+            text: `📤 ${ip}`,
+            callback_data: `resend_${version}_${ip}`
+          },
+          {
+            text: `🗑️ Удалить ${ip}`,
+            callback_data: `delete_${version}_${ip}`
+          }
+        ]);
       });
 
-      this.bot.sendMessage(chatId, clientsMessage, { parse_mode: 'Markdown' });
+      this.bot.sendMessage(chatId, clientsMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+      });
 
     } catch (error) {
       logger.error(`Error showing AWG ${version} clients list for chat ${chatId}:`, error);
@@ -1226,9 +1544,9 @@ google.com
         let message = '';
         
         if (version === 'both') {
-          message = `✅ *Установка завершена!*\n\n*AWG v1:*\n• Порт: ${result.results.v1.port}\n• Контейнер: \`${result.results.v1.containerName}\`\n• Конфиг: \`${result.results.v1.configPath}\`\n\n*AWG v2:*\n• Порт: ${result.results.v2.port}\n• Контейнер: \`${result.results.v2.containerName}\`\n• Конфиг: \`${result.results.v2.configPath}\`\n\nТеперь можно создавать клиентов через /config`;
+          message = `✅ *Установка завершена!*\n\n*AWG v1:*\n• Порт: ${result.results.v1.port}\n• Контейнер: \`${result.results.v1.containerName}\`\n• Конфиг: \`${result.results.v1.configPath}\`\n\n*AWG v2:*\n• Порт: ${result.results.v2.port}\n• Контейнер: \`${result.results.v2.containerName}\`\n• Конфиг: \`${result.results.v2.configPath}\`\n\nТеперь можно создавать клиентов через /admin`;
         } else {
-          message = `✅ *Установка AWG ${version} завершена!*\n\n📋 *Детали:*\n• Версия: ${version}\n• Порт: ${port}\n• Контейнер: \`${result.containerName}\`\n• Конфиг: \`${result.configPath}\`\n• Клиентов: 0\n\nТеперь можно создавать клиентов через /config`;
+          message = `✅ *Установка AWG ${version} завершена!*\n\n📋 *Детали:*\n• Версия: ${version}\n• Порт: ${port}\n• Контейнер: \`${result.containerName}\`\n• Конфиг: \`${result.configPath}\`\n• Клиентов: 0\n\nТеперь можно создавать клиентов через /admin`;
         }
         
         await this.bot.editMessageText(message, {

@@ -11,7 +11,8 @@ const CONTAINERS = {
     v1: {
         name: 'amnezia-awg',
         configPath: '/opt/amnezia/amnezia-awg',
-        image: 'amnezia-awg:latest',
+        image: 'amneziavpn/amnezia-wg:latest',
+        fallbackImage: 'amnezia-awg:latest',
         network: '10.8.1.0/24',
         params: {
             Jc: 6,
@@ -28,7 +29,8 @@ const CONTAINERS = {
     v2: {
         name: 'amnezia-awg2',
         configPath: '/opt/amnezia/amnezia-awg2',
-        image: 'amnezia-awg2:latest',
+        image: 'amneziavpn/amnezia-wg:latest',
+        fallbackImage: 'amnezia-awg2:latest',
         network: '10.8.1.0/24',
         params: {
             Jc: 6,
@@ -370,24 +372,47 @@ async function installServer(version, port, progressCallback = () => {}) {
         progressCallback('⏳ Создаю конфигурацию...');
         await createServerConfig(version, port, keys, configPath);
         
-        // Шаг 4: Проверка образа (локальные образы не нужно скачивать)
+        // Шаг 4: Получение образа с fallback
         progressCallback('⏳ Проверяю образ Docker...');
+        let imageToUse = container.image;
+        
         try {
+            // Пробуем публичный образ
             const { stdout } = await execAsync(`docker images -q ${container.image}`);
             if (stdout.trim()) {
-                logger.info(`[AWGInstaller] Образ ${container.image} найден локально`);
+                logger.info(`[AWGInstaller] Публичный образ ${container.image} найден локально`);
             } else {
-                throw new Error('Образ не найден');
+                logger.info(`[AWGInstaller] Скачиваю публичный образ ${container.image}...`);
+                await execAsync(`docker pull ${container.image}`);
+                logger.info(`[AWGInstaller] Публичный образ ${container.image} скачан`);
             }
         } catch (error) {
-            logger.info(`[AWGInstaller] Образ не найден локально, скачиваю...`);
+            // Fallback на локальный образ
+            logger.warn(`[AWGInstaller] Не удалось получить публичный образ: ${error.message}`);
+            logger.info(`[AWGInstaller] Пробую локальный образ ${container.fallbackImage}...`);
+            
             try {
-                await execAsync(`docker pull ${container.image}`);
-                logger.info(`[AWGInstaller] Образ ${container.image} скачан`);
-            } catch (pullError) {
-                throw new Error(`Не удалось скачать образ ${container.image}. Убедитесь что образ существует локально или доступен в Docker Hub. Ошибка: ${pullError.message}`);
+                const { stdout } = await execAsync(`docker images -q ${container.fallbackImage}`);
+                if (stdout.trim()) {
+                    imageToUse = container.fallbackImage;
+                    logger.info(`[AWGInstaller] Локальный образ ${container.fallbackImage} найден`);
+                } else {
+                    throw new Error(`Локальный образ ${container.fallbackImage} не найден`);
+                }
+            } catch (fallbackError) {
+                throw new Error(
+                    `Не удалось получить образ.\n` +
+                    `Публичный образ: ${error.message}\n` +
+                    `Локальный образ: ${fallbackError.message}\n\n` +
+                    `Убедитесь что:\n` +
+                    `1. Есть доступ к Docker Hub для ${container.image}\n` +
+                    `2. Или создан локальный образ ${container.fallbackImage}`
+                );
             }
         }
+        
+        // Обновляем образ для использования
+        container.image = imageToUse;
         
         // Шаг 5: Запуск контейнера
         progressCallback('⏳ Запускаю контейнер...');

@@ -388,7 +388,7 @@ PersistentKeepalive = 25
   /**
    * Сгенерировать новый клиентский конфиг
    */
-  async generateClientConfig(version = null, clientName = 'client') {
+  async generateClientConfig(version = null, vpsLabel = null) {
     // Инициализируем если еще не сделали
     if (!this.initialized) {
       await this.initialize();
@@ -396,7 +396,7 @@ PersistentKeepalive = 25
 
     // Получаем контейнер
     const container = this.getContainer(version);
-    logger.info(`Generating ${container.version} config for ${clientName} using ${container.name}`);
+    logger.info(`Generating ${container.version} config using ${container.name}${vpsLabel ? ` with label: ${vpsLabel}` : ''}`);
 
     // Проверяем контейнер
     const isRunning = await this.checkContainer(container.name);
@@ -416,8 +416,14 @@ PersistentKeepalive = 25
     // Создаем клиентский конфиг
     const configContent = this.createClientConfig(container, keys.privateKey, ip);
 
-    // Сохраняем конфиг в файл
-    const filename = `AWG${container.version}_${ip.replace(/\./g, '_')}.conf`;
+    // Сохраняем конфиг в файл с меткой VPS если указана
+    let filename;
+    if (vpsLabel) {
+      filename = `${vpsLabel}_AWG${container.version}_${ip.replace(/\./g, '_')}.conf`;
+    } else {
+      filename = `AWG${container.version}_${ip.replace(/\./g, '_')}.conf`;
+    }
+    
     const filepath = path.join(config.outputDir, filename);
 
     fs.writeFileSync(filepath, configContent, 'utf8');
@@ -505,6 +511,108 @@ PersistentKeepalive = 25
       logger.error(`Error getting clients for ${container.name}:`, error);
       return [];
     }
+  /**
+   * Восстановить конфигурацию клиента по IP
+   */
+  async regenerateClientConfig(containerName, clientIP, vpsLabel = null) {
+    const container = this.availableContainers.find(c => c.name === containerName);
+    if (!container) {
+      throw new Error(`Container ${containerName} not found`);
+    }
+    
+    logger.info(`Regenerating config for ${clientIP} from ${containerName}`);
+    
+    try {
+      // Получаем конфигурацию сервера из контейнера
+      const { stdout: serverConfig } = await execAsync(
+        `docker exec ${container.name} cat ${container.configPath}`
+      );
+      
+      // Ищем секцию [Peer] для этого IP
+      const peerRegex = new RegExp(
+        `\\[Peer\\][\\s\\S]*?AllowedIPs\\s*=\\s*${clientIP.replace(/\./g, '\\.')}\\/32[\\s\\S]*?(?=\\[Peer\\]|$)`,
+        'g'
+      );
+      
+      const peerMatch = serverConfig.match(peerRegex);
+      if (!peerMatch || peerMatch.length === 0) {
+        throw new Error(`Client with IP ${clientIP} not found in server config`);
+      }
+      
+      const peerSection = peerMatch[0];
+      
+      // Извлекаем PublicKey и PresharedKey клиента
+      const pubKeyMatch = peerSection.match(/PublicKey\s*=\s*(.+)/);
+      const pskMatch = peerSection.match(/PresharedKey\s*=\s*(.+)/);
+      
+      if (!pubKeyMatch || !pskMatch) {
+        throw new Error(`Failed to extract keys for ${clientIP}`);
+      }
+      
+      const clientPublicKey = pubKeyMatch[1].trim();
+      const presharedKey = pskMatch[1].trim();
+      
+      // Генерируем приватный ключ клиента из публичного невозможно,
+      // поэтому нужно извлечь его из сохранённого конфига
+      // Ищем файл конфигурации в output директории
+      const outputDir = config.outputDir;
+      const files = fs.readdirSync(outputDir);
+      
+      // Ищем файл с этим IP
+      const ipPattern = clientIP.replace(/\./g, '_');
+      const configFile = files.find(f => f.includes(ipPattern) && f.endsWith('.conf'));
+      
+      if (!configFile) {
+        throw new Error(
+          `Configuration file for ${clientIP} not found in ${outputDir}. ` +
+          `Cannot regenerate without original private key. ` +
+          `Please generate a new configuration instead.`
+        );
+      }
+      
+      // Читаем сохранённый конфиг
+      const savedConfigPath = path.join(outputDir, configFile);
+      const savedConfig = fs.readFileSync(savedConfigPath, 'utf8');
+      
+      // Извлекаем приватный ключ из сохранённого конфига
+      const privKeyMatch = savedConfig.match(/PrivateKey\s*=\s*(.+)/);
+      if (!privKeyMatch) {
+        throw new Error(`Private key not found in saved config ${configFile}`);
+      }
+      
+      const clientPrivateKey = privKeyMatch[1].trim();
+      
+      // Создаём клиентский конфиг
+      const configContent = this.createClientConfig(container, clientPrivateKey, clientIP);
+      
+      // Сохраняем конфиг в файл с меткой VPS если указана
+      let filename;
+      if (vpsLabel) {
+        filename = `${vpsLabel}_AWG${container.version}_${clientIP.replace(/\./g, '_')}_RESENT.conf`;
+      } else {
+        filename = `AWG${container.version}_${clientIP.replace(/\./g, '_')}_RESENT.conf`;
+      }
+      
+      const filepath = path.join(outputDir, filename);
+      fs.writeFileSync(filepath, configContent, 'utf8');
+      
+      logger.info(`Regenerated config saved: ${filepath}`);
+      
+      return {
+        filepath,
+        filename,
+        ip: clientIP,
+        publicKey: clientPublicKey,
+        version: container.version,
+        containerName: container.name
+      };
+      
+    } catch (error) {
+      logger.error(`Error regenerating config for ${clientIP}:`, error);
+      throw error;
+    }
+  }
+
   }
 
   /**
