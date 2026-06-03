@@ -77,6 +77,9 @@ if [ -d "$BOT_DIR" ]; then
     # Удаляем образ
     docker rmi netcrazybot-netcrazybot 2>/dev/null || true
     
+    # Переходим в родительскую директорию перед удалением
+    cd /opt
+    
     # Удаляем директорию
     rm -rf "$BOT_DIR"
     
@@ -84,8 +87,11 @@ if [ -d "$BOT_DIR" ]; then
     echo ""
 fi
 
+# Убеждаемся что мы в /opt перед клонированием
+cd /opt
+
 log_info "Клонирование репозитория..."
-git clone https://github.com/4539617/netcrazebot.git "$BOT_DIR"
+git clone https://github.com/4539617/netcrazebot.git netcrazybot
 cd "$BOT_DIR"
 log_success "Репозиторий склонирован: $BOT_DIR"
 echo ""
