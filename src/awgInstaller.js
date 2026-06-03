@@ -190,14 +190,14 @@ async function generateServerKeys() {
     
     try {
         // Генерируем приватный ключ на хосте (wg должен быть установлен через install.sh)
-        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i wg genkey');
+        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/wg genkey');
         
         // Генерируем публичный ключ из приватного на хосте
         const privKeyClean = privateKey.trim();
-        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m -u -n -i wg pubkey`);
+        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m -u -n -i /usr/bin/wg pubkey`);
         
         // Генерируем PresharedKey на хосте
-        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -n -i wg genpsk');
+        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/wg genpsk');
         
         const keys = {
             privateKey: privKeyClean,
