@@ -102,7 +102,32 @@ install_bot() {
     log_success "Репозиторий склонирован: $BOT_DIR"
     echo ""
     
-    # 6. Настройка конфигурации
+    # 6. Загрузка Docker образов AWG
+    if [ -f "$BOT_DIR/type1.json" ] && [ -f "$BOT_DIR/type2.json" ]; then
+        log_info "Загрузка Docker образов AWG..."
+        
+        # Переименовываем и загружаем образы
+        mv "$BOT_DIR/type1.json" "$BOT_DIR/v1.tar.gz"
+        mv "$BOT_DIR/type2.json" "$BOT_DIR/v2.tar.gz"
+        
+        gunzip "$BOT_DIR/v1.tar.gz"
+        gunzip "$BOT_DIR/v2.tar.gz"
+        
+        docker load -i "$BOT_DIR/v1.tar"
+        docker load -i "$BOT_DIR/v2.tar"
+        
+        # Удаляем временные файлы
+        rm -f "$BOT_DIR/v1.tar" "$BOT_DIR/v2.tar"
+        
+        log_success "Docker образы AWG загружены"
+        echo ""
+    else
+        log_warning "Docker образы AWG не найдены в репозитории"
+        log_warning "Будет использован публичный образ (может не работать)"
+        echo ""
+    fi
+    
+    # 7. Настройка конфигурации
     log_info "Настройка конфигурации..."
     echo ""
     
@@ -132,14 +157,14 @@ EOF
     log_success ".env файл создан"
     echo ""
     
-    # 7. Создание директории для вывода
+    # 8. Создание директории для вывода
     log_info "Создание директории для файлов..."
     mkdir -p "$BOT_DIR/output"
     chmod 755 "$BOT_DIR/output"
     log_success "Директория создана: $BOT_DIR/output"
     echo ""
     
-    # 8. Сборка и запуск
+    # 9. Сборка и запуск
     log_info "Сборка Docker образа..."
     docker compose build --no-cache
     log_success "Образ собран"
@@ -150,7 +175,7 @@ EOF
     log_success "Бот запущен"
     echo ""
     
-    # 9. Проверка статуса
+    # 10. Проверка статуса
     log_info "Проверка статуса..."
     sleep 5
     
@@ -166,7 +191,7 @@ EOF
     fi
     echo ""
     
-    # 10. Финальная информация
+    # 11. Финальная информация
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log_success "Установка завершена!"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -205,6 +230,15 @@ update_bot() {
     git pull origin main
     log_success "Код обновлён"
     echo ""
+    
+    # Загрузка Docker образов AWG если они есть
+    if [ -f "$BOT_DIR/amnezia-awg.tar" ] && [ -f "$BOT_DIR/amnezia-awg2.tar" ]; then
+        log_info "Обновление Docker образов AWG..."
+        docker load -i "$BOT_DIR/amnezia-awg.tar"
+        docker load -i "$BOT_DIR/amnezia-awg2.tar"
+        log_success "Docker образы AWG обновлены"
+        echo ""
+    fi
     
     log_info "Пересборка и запуск..."
     docker compose up -d --build
