@@ -342,6 +342,72 @@ remove_awg2() {
     log_success "✅ AWG v2 полностью удалён"
 }
 
+# Функция просмотра логов
+show_logs() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_info "Логи бота (Ctrl+C для выхода)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    if ! docker ps | grep -q netcrazybot; then
+        log_error "Бот не запущен"
+        return
+    fi
+    
+    docker logs -f netcrazybot
+}
+
+# Функция полного удаления
+remove_all() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_warning "Полное удаление (AWG + Бот)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    log_warning "⚠️  ВНИМАНИЕ: Это удалит:"
+    echo "  • Бот и все его данные"
+    echo "  • AWG v1 и все конфигурации"
+    echo "  • AWG v2 и все конфигурации"
+    echo ""
+    read -p "Вы уверены? (yes/no): " CONFIRM </dev/tty
+    echo ""
+    
+    if [ "$CONFIRM" != "yes" ]; then
+        log_info "Удаление отменено"
+        return
+    fi
+    
+    # Удаление AWG v1
+    log_info "Удаление AWG v1..."
+    docker stop amnezia-awg 2>/dev/null || true
+    docker rm amnezia-awg 2>/dev/null || true
+    rm -rf /opt/amnezia/amnezia-awg 2>/dev/null || true
+    log_success "AWG v1 удалён"
+    echo ""
+    
+    # Удаление AWG v2
+    log_info "Удаление AWG v2..."
+    docker stop amnezia-awg2 2>/dev/null || true
+    docker rm amnezia-awg2 2>/dev/null || true
+    rm -rf /opt/amnezia/amnezia-awg2 2>/dev/null || true
+    log_success "AWG v2 удалён"
+    echo ""
+    
+    # Удаление бота
+    log_info "Удаление бота..."
+    docker stop netcrazybot 2>/dev/null || true
+    docker rm netcrazybot 2>/dev/null || true
+    docker rmi netcrazybot-netcrazybot 2>/dev/null || true
+    cd /opt
+    rm -rf "$BOT_DIR" 2>/dev/null || true
+    log_success "Бот удалён"
+    echo ""
+    
+    log_success "✅ Всё удалено полностью"
+}
+
 # Главное меню
 show_menu() {
     clear
@@ -355,6 +421,8 @@ show_menu() {
     echo "  3) Удаление бота"
     echo "  4) Удаление AWG v1"
     echo "  5) Удаление AWG v2"
+    echo "  6) Логи бота"
+    echo "  7) Удалить всё (AWG + Бот)"
     echo "  0) Выход"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -364,7 +432,7 @@ show_menu() {
 # Основной цикл
 while true; do
     show_menu
-    read -p "Выберите действие (0-5): " choice </dev/tty
+    read -p "Выберите действие (0-7): " choice </dev/tty
     
     case $choice in
         1)
@@ -387,6 +455,14 @@ while true; do
             ;;
         5)
             remove_awg2
+            echo ""
+            read -p "Нажмите Enter для продолжения..." </dev/tty
+            ;;
+        6)
+            show_logs
+            ;;
+        7)
+            remove_all
             echo ""
             read -p "Нажмите Enter для продолжения..." </dev/tty
             ;;
