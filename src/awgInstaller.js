@@ -11,7 +11,7 @@ const CONTAINERS = {
     v1: {
         name: 'amnezia-awg',
         configPath: '/opt/amnezia/amnezia-awg',
-        image: 'amneziavpn/amnezia-wg:latest',
+        image: 'amnezia-awg:latest',
         network: '10.8.1.0/24',
         params: {
             Jc: 6,
@@ -28,7 +28,7 @@ const CONTAINERS = {
     v2: {
         name: 'amnezia-awg2',
         configPath: '/opt/amnezia/amnezia-awg2',
-        image: 'amneziavpn/amnezia-wg:latest',
+        image: 'amnezia-awg2:latest',
         network: '10.8.1.0/24',
         params: {
             Jc: 6,
@@ -358,10 +358,16 @@ async function installServer(version, port, progressCallback = () => {}) {
         progressCallback('⏳ Создаю конфигурацию...');
         await createServerConfig(version, port, keys, configPath);
         
-        // Шаг 4: Скачивание образа
-        progressCallback('⏳ Скачиваю образ Docker...');
-        await execAsync(`docker pull ${container.image}`);
-        logger.info(`[AWGInstaller] Образ ${container.image} скачан`);
+        // Шаг 4: Проверка образа (локальные образы не нужно скачивать)
+        progressCallback('⏳ Проверяю образ Docker...');
+        try {
+            await execAsync(`docker image inspect ${container.image}`);
+            logger.info(`[AWGInstaller] Образ ${container.image} найден локально`);
+        } catch (error) {
+            logger.info(`[AWGInstaller] Образ не найден, скачиваю...`);
+            await execAsync(`docker pull ${container.image}`);
+            logger.info(`[AWGInstaller] Образ ${container.image} скачан`);
+        }
         
         // Шаг 5: Запуск контейнера
         progressCallback('⏳ Запускаю контейнер...');
