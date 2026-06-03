@@ -37,7 +37,7 @@ echo ""
 
 # 2. Установка базовых пакетов
 log_info "Установка необходимых пакетов..."
-apt-get install -y -qq curl git ca-certificates gnupg lsb-release
+apt-get install -y -qq curl git ca-certificates gnupg lsb-release wireguard-tools
 log_success "Пакеты установлены"
 echo ""
 

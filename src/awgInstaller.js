@@ -182,58 +182,25 @@ async function removeServer(version) {
 }
 
 /**
- * Установка необходимых пакетов на хосте через nsenter
- * @returns {Promise<void>}
- */
-async function installRequiredPackages() {
-    logger.info('[AWGInstaller] Проверка необходимых пакетов на хосте...');
-    
-    try {
-        // Проверяем наличие wireguard-tools на хосте
-        try {
-            await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "which wg"');
-            logger.info('[AWGInstaller] wireguard-tools уже установлен на хосте');
-            return;
-        } catch (error) {
-            logger.info('[AWGInstaller] wireguard-tools не найден на хосте, устанавливаю...');
-        }
-        
-        // Устанавливаем wireguard-tools на хосте
-        await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "apt-get update -qq && apt-get install -y -qq wireguard-tools"');
-        logger.info('[AWGInstaller] wireguard-tools успешно установлен на хосте');
-        
-        // Проверяем установку
-        await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "which wg"');
-        logger.info('[AWGInstaller] Проверка установки wireguard-tools: OK');
-        
-    } catch (error) {
-        logger.error(`[AWGInstaller] Ошибка установки пакетов: ${error.message}`);
-        throw new Error(`Не удалось установить необходимые пакеты на хосте: ${error.message}`);
-    }
-}
-
-/**
- * Генерация серверных ключей на хосте
+ * Генерация серверных ключей на хосте через nsenter
  * @returns {Promise<Object>} Объект с ключами
  */
 async function generateServerKeys() {
     logger.info('[AWGInstaller] Генерация ключей сервера на хосте...');
     
     try {
-        // Устанавливаем необходимые пакеты если их нет
-        await installRequiredPackages();
-        
-        // Генерируем приватный ключ на хосте
-        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "wg genkey"');
+        // Генерируем приватный ключ на хосте (wg должен быть установлен через install.sh)
+        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i wg genkey');
         
         // Генерируем публичный ключ из приватного на хосте
-        const { stdout: publicKey } = await execAsync(`nsenter -t 1 -m -u -n -i /bin/bash -c "echo '${privateKey.trim()}' | wg pubkey"`);
+        const privKeyClean = privateKey.trim();
+        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m -u -n -i wg pubkey`);
         
         // Генерируем PresharedKey на хосте
-        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "wg genpsk"');
+        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -n -i wg genpsk');
         
         const keys = {
-            privateKey: privateKey.trim(),
+            privateKey: privKeyClean,
             publicKey: publicKey.trim(),
             presharedKey: presharedKey.trim()
         };
