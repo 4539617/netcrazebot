@@ -67,116 +67,84 @@ echo ""
 BOT_DIR="/opt/netcrazybot"
 
 if [ -d "$BOT_DIR" ]; then
-    log_warning "Директория $BOT_DIR уже существует"
+    log_warning "Директория $BOT_DIR уже существует - выполняю обновление"
+    log_info "Обновление бота..."
     
-    # Проверяем, запущен ли скрипт интерактивно
-    if [ -t 0 ]; then
-        # Интерактивный режим - спрашиваем пользователя
-        echo ""
-        echo "Выберите действие:"
-        echo "  1) Обновить бота (скачать свежий код и перезапустить)"
-        echo "  2) Полная переустановка (удалить всё и установить заново)"
-        echo "  3) Отмена"
-        echo ""
-        read -p "Ваш выбор (1/2/3): " -n 1 -r
-        echo ""
-        echo ""
-        CHOICE=$REPLY
-    else
-        # Неинтерактивный режим (curl | bash) - автоматически обновляем
-        log_info "Автоматическое обновление (неинтерактивный режим)"
-        CHOICE="1"
+    # Сохраняем .env файл
+    if [ -f "$BOT_DIR/.env" ]; then
+        log_info "Сохранение конфигурации..."
+        cp "$BOT_DIR/.env" "/tmp/netcrazybot.env.backup"
+        log_success "Конфигурация сохранена"
     fi
     
-    if [[ $CHOICE == "1" ]]; then
-        log_info "Обновление бота..."
-        
-        # Сохраняем .env файл
-        if [ -f "$BOT_DIR/.env" ]; then
-            log_info "Сохранение конфигурации..."
-            cp "$BOT_DIR/.env" "/tmp/netcrazybot.env.backup"
-            log_success "Конфигурация сохранена"
-        fi
-        
-        # Переходим в директорию и обновляем код
-        cd "$BOT_DIR"
-        
-        # Проверяем, является ли директория git репозиторием
-        if [ -d ".git" ]; then
-            log_info "Скачивание обновлений из GitHub..."
-            git fetch origin
-            git reset --hard origin/main
-            log_success "Код обновлён"
-        else
-            log_warning "Директория не является git репозиторием, клонирую заново..."
-            cd /opt
-            rm -rf "$BOT_DIR"
-            git clone https://github.com/4539617/netcrazebot.git "$BOT_DIR"
-            cd "$BOT_DIR"
-            log_success "Репозиторий склонирован"
-        fi
-        
-        # Восстанавливаем .env файл
-        if [ -f "/tmp/netcrazybot.env.backup" ]; then
-            log_info "Восстановление конфигурации..."
-            cp "/tmp/netcrazybot.env.backup" "$BOT_DIR/.env"
-            rm "/tmp/netcrazybot.env.backup"
-            log_success "Конфигурация восстановлена"
-        fi
-        
-        # Пересобираем и перезапускаем контейнер
-        log_info "Пересборка Docker образа..."
-        docker compose build --no-cache
-        log_success "Образ пересобран"
-        echo ""
-        
-        log_info "Перезапуск бота..."
-        docker compose down
-        docker compose up -d
-        log_success "Бот перезапущен"
-        echo ""
-        
-        # Проверка статуса
-        log_info "Проверка статуса..."
-        sleep 5
-        
-        if docker ps | grep -q netcrazybot; then
-            log_success "Бот успешно обновлён и запущен!"
-            echo ""
-            docker ps --filter name=netcrazybot --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-        else
-            log_error "Бот не запустился. Проверьте логи:"
-            echo ""
-            docker logs netcrazybot
-            exit 1
-        fi
-        echo ""
-        
-        # Финальная информация
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        log_success "Обновление завершено!"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-        echo "📁 Директория: $BOT_DIR"
-        echo "🔧 Конфигурация: $BOT_DIR/.env"
-        echo ""
-        echo "🔍 Полезные команды:"
-        echo "  docker logs -f netcrazybot          # Просмотр логов"
-        echo "  docker restart netcrazybot          # Перезапуск"
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        exit 0
-        
-    elif [[ $CHOICE == "2" ]]; then
-        log_info "Полная переустановка..."
-        docker stop netcrazybot 2>/dev/null || true
-        docker rm netcrazybot 2>/dev/null || true
-        rm -rf "$BOT_DIR"
-        log_success "Старая установка удалена"
+    # Переходим в директорию и обновляем код
+    cd "$BOT_DIR"
+    
+    # Проверяем, является ли директория git репозиторием
+    if [ -d ".git" ]; then
+        log_info "Скачивание обновлений из GitHub..."
+        git fetch origin
+        git reset --hard origin/main
+        log_success "Код обновлён"
     else
-        log_error "Установка отменена"
+        log_warning "Директория не является git репозиторием, клонирую заново..."
+        cd /opt
+        rm -rf "$BOT_DIR"
+        git clone https://github.com/4539617/netcrazebot.git "$BOT_DIR"
+        cd "$BOT_DIR"
+        log_success "Репозиторий склонирован"
+    fi
+    
+    # Восстанавливаем .env файл
+    if [ -f "/tmp/netcrazybot.env.backup" ]; then
+        log_info "Восстановление конфигурации..."
+        cp "/tmp/netcrazybot.env.backup" "$BOT_DIR/.env"
+        rm "/tmp/netcrazybot.env.backup"
+        log_success "Конфигурация восстановлена"
+    fi
+    
+    # Пересобираем и перезапускаем контейнер
+    log_info "Пересборка Docker образа..."
+    docker compose build --no-cache
+    log_success "Образ пересобран"
+    echo ""
+    
+    log_info "Перезапуск бота..."
+    docker compose down
+    docker compose up -d
+    log_success "Бот перезапущен"
+    echo ""
+    
+    # Проверка статуса
+    log_info "Проверка статуса..."
+    sleep 5
+    
+    if docker ps | grep -q netcrazybot; then
+        log_success "Бот успешно обновлён и запущен!"
+        echo ""
+        docker ps --filter name=netcrazybot --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    else
+        log_error "Бот не запустился. Проверьте логи:"
+        echo ""
+        docker logs netcrazybot
         exit 1
     fi
+    echo ""
+    
+    # Финальная информация
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_success "Обновление завершено!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "📁 Директория: $BOT_DIR"
+    echo "🔧 Конфигурация: $BOT_DIR/.env"
+    echo ""
+    echo "🔍 Полезные команды:"
+    echo "  docker logs -f netcrazybot          # Просмотр логов"
+    echo "  docker restart netcrazybot          # Перезапуск"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    exit 0
 fi
 
 log_info "Клонирование репозитория..."
