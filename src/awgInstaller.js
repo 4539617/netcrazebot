@@ -191,7 +191,7 @@ async function installRequiredPackages() {
     try {
         // Проверяем наличие wireguard-tools на хосте
         try {
-            await execAsync('nsenter -t 1 -m -u -n -i which wg');
+            await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "which wg"');
             logger.info('[AWGInstaller] wireguard-tools уже установлен на хосте');
             return;
         } catch (error) {
@@ -199,11 +199,11 @@ async function installRequiredPackages() {
         }
         
         // Устанавливаем wireguard-tools на хосте
-        await execAsync('nsenter -t 1 -m -u -n -i sh -c "apt-get update -qq && apt-get install -y -qq wireguard-tools"');
+        await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "apt-get update -qq && apt-get install -y -qq wireguard-tools"');
         logger.info('[AWGInstaller] wireguard-tools успешно установлен на хосте');
         
         // Проверяем установку
-        await execAsync('nsenter -t 1 -m -u -n -i which wg');
+        await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "which wg"');
         logger.info('[AWGInstaller] Проверка установки wireguard-tools: OK');
         
     } catch (error) {
@@ -224,13 +224,13 @@ async function generateServerKeys() {
         await installRequiredPackages();
         
         // Генерируем приватный ключ на хосте
-        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i wg genkey');
+        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "wg genkey"');
         
         // Генерируем публичный ключ из приватного на хосте
-        const { stdout: publicKey } = await execAsync(`nsenter -t 1 -m -u -n -i sh -c 'echo "${privateKey.trim()}" | wg pubkey'`);
+        const { stdout: publicKey } = await execAsync(`nsenter -t 1 -m -u -n -i /bin/bash -c "echo '${privateKey.trim()}' | wg pubkey"`);
         
         // Генерируем PresharedKey на хосте
-        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -n -i wg genpsk');
+        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -n -i /bin/bash -c "wg genpsk"');
         
         const keys = {
             privateKey: privateKey.trim(),
