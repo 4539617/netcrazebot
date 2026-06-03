@@ -76,7 +76,7 @@ if [ -d "$BOT_DIR" ]; then
     echo "  1) Удалить и выйти"
     echo "  2) Удалить и установить заново"
     echo ""
-    read -p "Ваш выбор (1/2): " CHOICE
+    read -p "Ваш выбор (1/2): " CHOICE </dev/tty
     echo ""
     
     if [ "$CHOICE" = "1" ]; then
