@@ -182,7 +182,82 @@ async function removeServer(version) {
 }
 
 /**
- * Генерация серверных ключей на хосте через nsenter + chroot
+ * Проверка наличия wireguard-tools на хосте
+ * @returns {Promise<boolean>} true если установлен
+ */
+async function checkWireguardTools() {
+    const methods = [
+        'nsenter -t 1 -m -u -i -n /usr/bin/which wg',
+        'nsenter -t 1 -m -u -i -n which wg',
+        'nsenter -t 1 -m sh -c "which wg"'
+    ];
+    
+    for (const method of methods) {
+        try {
+            await execAsync(method);
+            logger.info('[AWGInstaller] wireguard-tools найден на хосте');
+            return true;
+        } catch (error) {
+            continue;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Установка wireguard-tools с несколькими методами fallback
+ * @returns {Promise<void>}
+ */
+async function installWireguardTools() {
+    logger.warn('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
+    
+    const methods = [
+        // Метод 1: Полные пути с nsenter
+        {
+            name: 'Full paths with nsenter',
+            commands: [
+                'nsenter -t 1 -m -u -i -n /usr/bin/apt-get update -qq',
+                'nsenter -t 1 -m -u -i -n /usr/bin/apt-get install -y -qq wireguard-tools'
+            ]
+        },
+        // Метод 2: nsenter с sh -c
+        {
+            name: 'nsenter with sh -c',
+            commands: [
+                'nsenter -t 1 -m -u -i -n sh -c "apt-get update -qq"',
+                'nsenter -t 1 -m -u -i -n sh -c "apt-get install -y -qq wireguard-tools"'
+            ]
+        },
+        // Метод 3: nsenter с chroot
+        {
+            name: 'nsenter with chroot',
+            commands: [
+                'nsenter -t 1 -m chroot /proc/1/root /usr/bin/apt-get update -qq',
+                'nsenter -t 1 -m chroot /proc/1/root /usr/bin/apt-get install -y -qq wireguard-tools'
+            ]
+        }
+    ];
+    
+    for (const method of methods) {
+        try {
+            logger.info(`[AWGInstaller] Попытка установки: ${method.name}`);
+            for (const cmd of method.commands) {
+                await execAsync(cmd);
+            }
+            logger.info(`[AWGInstaller] wireguard-tools успешно установлен методом: ${method.name}`);
+            return;
+        } catch (error) {
+            logger.warn(`[AWGInstaller] Метод ${method.name} не сработал: ${error.message}`);
+            continue;
+        }
+    }
+    
+    throw new Error('Не удалось установить wireguard-tools ни одним из методов');
+}
+
+/**
+ * Генерация серверных ключей на хосте через nsenter
  * wireguard-tools должен быть установлен через install.sh
  * @returns {Promise<Object>} Объект с ключами
  */
@@ -190,34 +265,83 @@ async function generateServerKeys() {
     logger.info('[AWGInstaller] Генерация ключей сервера на хосте...');
     
     try {
-        // Проверяем наличие wireguard-tools на хосте (без chroot)
-        try {
-            await execAsync('nsenter -t 1 -m -u -i -n which wg');
-            logger.info('[AWGInstaller] wireguard-tools найден на хосте');
-        } catch (error) {
-            logger.warn('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
-            
-            // Устанавливаем wireguard-tools на хосте (без chroot, только nsenter)
-            await execAsync('nsenter -t 1 -m -u -i -n apt-get update -qq');
-            await execAsync('nsenter -t 1 -m -u -i -n apt-get install -y -qq wireguard-tools');
-            
-            logger.info('[AWGInstaller] wireguard-tools успешно установлен на хосте');
+        // Проверяем наличие wireguard-tools на хосте
+        const hasWg = await checkWireguardTools();
+        
+        if (!hasWg) {
+            await installWireguardTools();
         }
         
-        // Генерируем приватный ключ на хосте (без chroot)
-        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -i -n wg genkey');
+        // Генерируем ключи с fallback методами
+        const keyMethods = [
+            'nsenter -t 1 -m -u -i -n /usr/bin/wg genkey',
+            'nsenter -t 1 -m -u -i -n wg genkey',
+            'nsenter -t 1 -m sh -c "wg genkey"'
+        ];
         
-        // Генерируем публичный ключ из приватного на хосте
-        const privKeyClean = privateKey.trim();
-        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m -u -i -n wg pubkey`);
+        let privateKey = '';
+        for (const method of keyMethods) {
+            try {
+                const { stdout } = await execAsync(method);
+                privateKey = stdout.trim();
+                break;
+            } catch (error) {
+                continue;
+            }
+        }
         
-        // Генерируем PresharedKey на хосте
-        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -i -n wg genpsk');
+        if (!privateKey) {
+            throw new Error('Не удалось сгенерировать приватный ключ');
+        }
+        
+        // Генерируем публичный ключ из приватного
+        const pubKeyMethods = [
+            `echo "${privateKey}" | nsenter -t 1 -m -u -i -n /usr/bin/wg pubkey`,
+            `echo "${privateKey}" | nsenter -t 1 -m -u -i -n wg pubkey`,
+            `echo "${privateKey}" | nsenter -t 1 -m sh -c "wg pubkey"`
+        ];
+        
+        let publicKey = '';
+        for (const method of pubKeyMethods) {
+            try {
+                const { stdout } = await execAsync(method);
+                publicKey = stdout.trim();
+                break;
+            } catch (error) {
+                continue;
+            }
+        }
+        
+        if (!publicKey) {
+            throw new Error('Не удалось сгенерировать публичный ключ');
+        }
+        
+        // Генерируем PresharedKey
+        const pskMethods = [
+            'nsenter -t 1 -m -u -i -n /usr/bin/wg genpsk',
+            'nsenter -t 1 -m -u -i -n wg genpsk',
+            'nsenter -t 1 -m sh -c "wg genpsk"'
+        ];
+        
+        let presharedKey = '';
+        for (const method of pskMethods) {
+            try {
+                const { stdout } = await execAsync(method);
+                presharedKey = stdout.trim();
+                break;
+            } catch (error) {
+                continue;
+            }
+        }
+        
+        if (!presharedKey) {
+            throw new Error('Не удалось сгенерировать preshared ключ');
+        }
         
         const keys = {
-            privateKey: privKeyClean,
-            publicKey: publicKey.trim(),
-            presharedKey: presharedKey.trim()
+            privateKey,
+            publicKey,
+            presharedKey
         };
         
         logger.info('[AWGInstaller] Ключи успешно сгенерированы на хосте');
