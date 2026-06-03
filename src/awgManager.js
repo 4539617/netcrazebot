@@ -511,6 +511,8 @@ PersistentKeepalive = 25
       logger.error(`Error getting clients for ${container.name}:`, error);
       return [];
     }
+  }
+
   /**
    * Восстановить конфигурацию клиента по IP
    */
@@ -611,8 +613,6 @@ PersistentKeepalive = 25
       logger.error(`Error regenerating config for ${clientIP}:`, error);
       throw error;
     }
-  }
-
   }
 
   /**
