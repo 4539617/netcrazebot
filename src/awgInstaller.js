@@ -303,16 +303,25 @@ async function startContainer(version, port, configPath) {
   ${container.image}`;
     
     try {
-        await execAsync(dockerCmd);
-        logger.info(`[AWGInstaller] Контейнер ${container.name} успешно запущен`);
+        const { stdout: containerId } = await execAsync(dockerCmd);
+        logger.info(`[AWGInstaller] Контейнер ${container.name} создан: ${containerId.trim()}`);
         
-        // Ждём 2 секунды для инициализации
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Ждём 3 секунды для инициализации
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
-        // Проверяем статус
-        const { stdout } = await execAsync(`docker ps --filter name=^${container.name}$ --format "{{.Status}}"`);
-        if (!stdout.includes('Up')) {
-            throw new Error('Контейнер не запустился');
+        // Проверяем статус контейнера
+        const { stdout: status } = await execAsync(`docker ps -a --filter name=^${container.name}$ --format "{{.Status}}"`);
+        logger.info(`[AWGInstaller] Статус контейнера: ${status.trim()}`);
+        
+        if (!status.includes('Up')) {
+            // Получаем логи контейнера для диагностики
+            try {
+                const { stdout: logs } = await execAsync(`docker logs ${container.name} 2>&1`);
+                logger.error(`[AWGInstaller] Логи контейнера:\n${logs}`);
+            } catch (logError) {
+                logger.error(`[AWGInstaller] Не удалось получить логи: ${logError.message}`);
+            }
+            throw new Error(`Контейнер не запустился. Статус: ${status.trim()}`);
         }
         
         logger.info(`[AWGInstaller] Контейнер ${container.name} работает`);
