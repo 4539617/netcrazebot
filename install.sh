@@ -105,20 +105,8 @@ install_bot() {
     # 6. Загрузка Docker образов AWG
     if [ -f "$BOT_DIR/type1.json" ] && [ -f "$BOT_DIR/type2.json" ]; then
         log_info "Загрузка Docker образов AWG..."
-        
-        # Переименовываем и загружаем образы
-        mv "$BOT_DIR/type1.json" "$BOT_DIR/v1.tar.gz"
-        mv "$BOT_DIR/type2.json" "$BOT_DIR/v2.tar.gz"
-        
-        gunzip "$BOT_DIR/v1.tar.gz"
-        gunzip "$BOT_DIR/v2.tar.gz"
-        
-        docker load -i "$BOT_DIR/v1.tar"
-        docker load -i "$BOT_DIR/v2.tar"
-        
-        # Удаляем временные файлы
-        rm -f "$BOT_DIR/v1.tar" "$BOT_DIR/v2.tar"
-        
+        docker load -i "$BOT_DIR/type1.json"
+        docker load -i "$BOT_DIR/type2.json"
         log_success "Docker образы AWG загружены"
         echo ""
     else
@@ -232,10 +220,10 @@ update_bot() {
     echo ""
     
     # Загрузка Docker образов AWG если они есть
-    if [ -f "$BOT_DIR/amnezia-awg.tar" ] && [ -f "$BOT_DIR/amnezia-awg2.tar" ]; then
+    if [ -f "$BOT_DIR/type1.json" ] && [ -f "$BOT_DIR/type2.json" ]; then
         log_info "Обновление Docker образов AWG..."
-        docker load -i "$BOT_DIR/amnezia-awg.tar"
-        docker load -i "$BOT_DIR/amnezia-awg2.tar"
+        docker load -i "$BOT_DIR/type1.json"
+        docker load -i "$BOT_DIR/type2.json"
         log_success "Docker образы AWG обновлены"
         echo ""
     fi

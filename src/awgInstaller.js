@@ -11,7 +11,7 @@ const CONTAINERS = {
     v1: {
         name: 'amnezia-awg',
         configPath: '/opt/amnezia/amnezia-awg',
-        image: 'v1:latest',
+        image: 'amnezia-awg:latest',
         fallbackImage: 'amneziavpn/amnezia-wg:latest',
         network: '10.8.1.0/24',
         params: {
@@ -29,7 +29,7 @@ const CONTAINERS = {
     v2: {
         name: 'amnezia-awg2',
         configPath: '/opt/amnezia/amnezia-awg2',
-        image: 'v2:latest',
+        image: 'amnezia-awg2:latest',
         fallbackImage: 'amneziavpn/amnezia-wg:latest',
         network: '10.8.1.0/24',
         params: {

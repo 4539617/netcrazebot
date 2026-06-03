@@ -1,0 +1,53 @@
+stages:
+  - deploy
+
+variables:
+  CONTAINER_NAME: netcrazybot
+
+deploy_production:
+  stage: deploy
+  image: docker:24.0
+  services:
+    - docker:dind
+  before_script:
+    - apk add --no-cache rsync openssh-client docker-cli-compose
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\tUserKnownHostsFile /dev/null\n\tPort ${SSH_PORT:-22}" > ~/.ssh/config
+
+    - |
+      cat > .env << EOF
+      TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      ADMIN_IDS=${ADMIN_IDS}
+      EOF
+
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "mkdir -p /opt/netcrazybot/src"
+
+  script:
+    - scp -i ~/.ssh/id_rsa Dockerfile root@$SERVER_IP:/opt/netcrazybot/
+    - scp -i ~/.ssh/id_rsa docker-compose.yml root@$SERVER_IP:/opt/netcrazybot/
+    - scp -i ~/.ssh/id_rsa package.json root@$SERVER_IP:/opt/netcrazybot/
+    - scp -i ~/.ssh/id_rsa .env root@$SERVER_IP:/opt/netcrazybot/
+    - scp -i ~/.ssh/id_rsa -r src/* root@$SERVER_IP:/opt/netcrazybot/src/
+
+    # Остановка и удаление старого контейнера
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "docker stop $CONTAINER_NAME || true"
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "docker rm -f $CONTAINER_NAME || true"
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "docker rmi -f netcrazybot:latest || true"
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "cd /opt/netcrazybot && docker compose down || true"
+
+    # Запуск нового контейнера
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "cd /opt/netcrazybot && docker compose up -d --build"
+
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "docker ps --filter name=$CONTAINER_NAME"
+    - sleep 3
+    - ssh -i ~/.ssh/id_rsa root@$SERVER_IP "docker logs --tail=30 $CONTAINER_NAME"
+
+  after_script:
+    - rm -f .env
+
+  only:
+    - main
+
+# Made with Bob
