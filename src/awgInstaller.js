@@ -182,169 +182,38 @@ async function removeServer(version) {
 }
 
 /**
- * Проверка наличия wireguard-tools на хосте
- * @returns {Promise<boolean>} true если установлен
- */
-async function checkWireguardTools() {
-    const methods = [
-        'nsenter -t 1 -m -u -i -n /usr/bin/which wg',
-        'nsenter -t 1 -m -u -i -n which wg',
-        'nsenter -t 1 -m sh -c "which wg"'
-    ];
-    
-    for (const method of methods) {
-        try {
-            await execAsync(method);
-            logger.info('[AWGInstaller] wireguard-tools найден на хосте');
-            return true;
-        } catch (error) {
-            continue;
-        }
-    }
-    
-    return false;
-}
-
-/**
- * Установка wireguard-tools с несколькими методами fallback
- * @returns {Promise<void>}
- */
-async function installWireguardTools() {
-    logger.warn('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
-    
-    const methods = [
-        // Метод 1: Полные пути с nsenter
-        {
-            name: 'Full paths with nsenter',
-            commands: [
-                'nsenter -t 1 -m -u -i -n /usr/bin/apt-get update -qq',
-                'nsenter -t 1 -m -u -i -n /usr/bin/apt-get install -y -qq wireguard-tools'
-            ]
-        },
-        // Метод 2: nsenter с sh -c
-        {
-            name: 'nsenter with sh -c',
-            commands: [
-                'nsenter -t 1 -m -u -i -n sh -c "apt-get update -qq"',
-                'nsenter -t 1 -m -u -i -n sh -c "apt-get install -y -qq wireguard-tools"'
-            ]
-        },
-        // Метод 3: nsenter с chroot
-        {
-            name: 'nsenter with chroot',
-            commands: [
-                'nsenter -t 1 -m chroot /proc/1/root /usr/bin/apt-get update -qq',
-                'nsenter -t 1 -m chroot /proc/1/root /usr/bin/apt-get install -y -qq wireguard-tools'
-            ]
-        }
-    ];
-    
-    for (const method of methods) {
-        try {
-            logger.info(`[AWGInstaller] Попытка установки: ${method.name}`);
-            for (const cmd of method.commands) {
-                await execAsync(cmd);
-            }
-            logger.info(`[AWGInstaller] wireguard-tools успешно установлен методом: ${method.name}`);
-            return;
-        } catch (error) {
-            logger.warn(`[AWGInstaller] Метод ${method.name} не сработал: ${error.message}`);
-            continue;
-        }
-    }
-    
-    throw new Error('Не удалось установить wireguard-tools ни одним из методов');
-}
-
-/**
- * Генерация серверных ключей на хосте через nsenter
- * wireguard-tools должен быть установлен через install.sh
+ * Генерация ключей через Docker контейнер
+ * Самый надежный метод - не зависит от хоста
  * @returns {Promise<Object>} Объект с ключами
  */
 async function generateServerKeys() {
-    logger.info('[AWGInstaller] Генерация ключей сервера на хосте...');
+    logger.info('[AWGInstaller] Генерация ключей через Docker контейнер...');
     
     try {
-        // Проверяем наличие wireguard-tools на хосте
-        const hasWg = await checkWireguardTools();
+        // Генерируем приватный ключ
+        const { stdout: privateKey } = await execAsync(
+            'docker run --rm alpine:latest sh -c "apk add -q wireguard-tools && wg genkey"'
+        );
         
-        if (!hasWg) {
-            await installWireguardTools();
-        }
-        
-        // Генерируем ключи с fallback методами
-        const keyMethods = [
-            'nsenter -t 1 -m -u -i -n /usr/bin/wg genkey',
-            'nsenter -t 1 -m -u -i -n wg genkey',
-            'nsenter -t 1 -m sh -c "wg genkey"'
-        ];
-        
-        let privateKey = '';
-        for (const method of keyMethods) {
-            try {
-                const { stdout } = await execAsync(method);
-                privateKey = stdout.trim();
-                break;
-            } catch (error) {
-                continue;
-            }
-        }
-        
-        if (!privateKey) {
-            throw new Error('Не удалось сгенерировать приватный ключ');
-        }
+        const privKeyClean = privateKey.trim();
         
         // Генерируем публичный ключ из приватного
-        const pubKeyMethods = [
-            `echo "${privateKey}" | nsenter -t 1 -m -u -i -n /usr/bin/wg pubkey`,
-            `echo "${privateKey}" | nsenter -t 1 -m -u -i -n wg pubkey`,
-            `echo "${privateKey}" | nsenter -t 1 -m sh -c "wg pubkey"`
-        ];
-        
-        let publicKey = '';
-        for (const method of pubKeyMethods) {
-            try {
-                const { stdout } = await execAsync(method);
-                publicKey = stdout.trim();
-                break;
-            } catch (error) {
-                continue;
-            }
-        }
-        
-        if (!publicKey) {
-            throw new Error('Не удалось сгенерировать публичный ключ');
-        }
+        const { stdout: publicKey } = await execAsync(
+            `docker run --rm alpine:latest sh -c "apk add -q wireguard-tools && echo '${privKeyClean}' | wg pubkey"`
+        );
         
         // Генерируем PresharedKey
-        const pskMethods = [
-            'nsenter -t 1 -m -u -i -n /usr/bin/wg genpsk',
-            'nsenter -t 1 -m -u -i -n wg genpsk',
-            'nsenter -t 1 -m sh -c "wg genpsk"'
-        ];
-        
-        let presharedKey = '';
-        for (const method of pskMethods) {
-            try {
-                const { stdout } = await execAsync(method);
-                presharedKey = stdout.trim();
-                break;
-            } catch (error) {
-                continue;
-            }
-        }
-        
-        if (!presharedKey) {
-            throw new Error('Не удалось сгенерировать preshared ключ');
-        }
+        const { stdout: presharedKey } = await execAsync(
+            'docker run --rm alpine:latest sh -c "apk add -q wireguard-tools && wg genpsk"'
+        );
         
         const keys = {
-            privateKey,
-            publicKey,
-            presharedKey
+            privateKey: privKeyClean,
+            publicKey: publicKey.trim(),
+            presharedKey: presharedKey.trim()
         };
         
-        logger.info('[AWGInstaller] Ключи успешно сгенерированы на хосте');
+        logger.info('[AWGInstaller] Ключи успешно сгенерированы через Docker');
         return keys;
     } catch (error) {
         logger.error(`[AWGInstaller] Ошибка генерации ключей: ${error.message}`);
