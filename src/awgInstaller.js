@@ -361,12 +361,20 @@ async function installServer(version, port, progressCallback = () => {}) {
         // Шаг 4: Проверка образа (локальные образы не нужно скачивать)
         progressCallback('⏳ Проверяю образ Docker...');
         try {
-            await execAsync(`docker image inspect ${container.image}`);
-            logger.info(`[AWGInstaller] Образ ${container.image} найден локально`);
+            const { stdout } = await execAsync(`docker images -q ${container.image}`);
+            if (stdout.trim()) {
+                logger.info(`[AWGInstaller] Образ ${container.image} найден локально`);
+            } else {
+                throw new Error('Образ не найден');
+            }
         } catch (error) {
-            logger.info(`[AWGInstaller] Образ не найден, скачиваю...`);
-            await execAsync(`docker pull ${container.image}`);
-            logger.info(`[AWGInstaller] Образ ${container.image} скачан`);
+            logger.info(`[AWGInstaller] Образ не найден локально, скачиваю...`);
+            try {
+                await execAsync(`docker pull ${container.image}`);
+                logger.info(`[AWGInstaller] Образ ${container.image} скачан`);
+            } catch (pullError) {
+                throw new Error(`Не удалось скачать образ ${container.image}. Убедитесь что образ существует локально или доступен в Docker Hub. Ошибка: ${pullError.message}`);
+            }
         }
         
         // Шаг 5: Запуск контейнера
