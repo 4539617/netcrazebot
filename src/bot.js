@@ -853,6 +853,31 @@ google.com
         clientsMessage += `${index + 1}. \`${ip}\`\n`;
         
         // Добавляем кнопки для каждого IP
+        keyboard.inline_keyboard.push([
+          {
+            text: `📤 ${ip}`,
+            callback_data: `resend_${version}_${ip}`
+          },
+          {
+            text: `🗑️ Удалить ${ip}`,
+            callback_data: `delete_${version}_${ip}`
+          }
+        ]);
+      });
+
+      this.bot.sendMessage(chatId, clientsMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+      });
+
+    } catch (error) {
+      logger.error(`Error showing AWG ${version} clients list for chat ${chatId}:`, error);
+      this.bot.sendMessage(
+        chatId,
+        `❌ Ошибка при получении списка клиентов: ${error.message}`
+      );
+    }
+  }
 
   async resendClientConfig(chatId, version, ip) {
     try {
@@ -928,6 +953,24 @@ google.com
         chatId,
         `⚠️ *Подтверждение удаления*\n\n` +
         `Вы уверены что хотите удалить клиента \`${ip}\` из ${version.toUpperCase()}?\n\n` +
+        `Это действие:\n` +
+        `• Удалит клиента из конфигурации сервера\n` +
+        `• Перезапустит контейнер AWG\n` +
+        `• Сохранённый файл конфигурации останется`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard
+        }
+      );
+      
+    } catch (error) {
+      logger.error(`Error requesting delete confirmation for ${ip}:`, error);
+      this.bot.sendMessage(
+        chatId,
+        `❌ Ошибка при запросе подтверждения: ${error.message}`
+      );
+    }
+  }
 
   async confirmDeleteClient(chatId, version, ip) {
     try {
@@ -1009,46 +1052,6 @@ google.com
     } catch (error) {
       logger.error(`Error in confirmDeleteClient for ${ip}:`, error);
       this.bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
-    }
-  }
-
-        `Это действие:\n` +
-        `• Удалит клиента из конфигурации сервера\n` +
-        `• Освободит IP адрес\n` +
-        `• Клиент больше не сможет подключиться\n\n` +
-        `⚠️ Файл конфигурации останется на сервере для возможности восстановления`,
-        { parse_mode: 'Markdown', reply_markup: keyboard }
-      );
-      
-    } catch (error) {
-      logger.error(`Error showing delete confirmation for ${ip}:`, error);
-      this.bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
-    }
-  }
-
-        keyboard.inline_keyboard.push([
-          {
-            text: `📤 ${ip}`,
-            callback_data: `resend_${version}_${ip}`
-          },
-          {
-            text: `🗑️ Удалить ${ip}`,
-            callback_data: `delete_${version}_${ip}`
-          }
-        ]);
-      });
-
-      this.bot.sendMessage(chatId, clientsMessage, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-      });
-
-    } catch (error) {
-      logger.error(`Error showing AWG ${version} clients list for chat ${chatId}:`, error);
-      this.bot.sendMessage(
-        chatId,
-        `❌ Ошибка при получении списка клиентов: ${error.message}`
-      );
     }
   }
 
