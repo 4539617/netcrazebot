@@ -182,56 +182,23 @@ async function removeServer(version) {
 }
 
 /**
- * Установка wireguard-tools на хосте если не установлен
- * @returns {Promise<void>}
- */
-async function ensureWireguardTools() {
-    logger.info('[AWGInstaller] Проверка wireguard-tools на хосте...');
-    
-    try {
-        // Проверяем наличие wg на хосте
-        await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/which wg');
-        logger.info('[AWGInstaller] wireguard-tools уже установлен');
-        return;
-    } catch (error) {
-        logger.info('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
-        
-        try {
-            // Устанавливаем через nsenter с полными путями
-            await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/apt-get update -qq');
-            await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/apt-get install -y -qq wireguard-tools');
-            logger.info('[AWGInstaller] wireguard-tools успешно установлен');
-            
-            // Проверяем установку
-            await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/which wg');
-            logger.info('[AWGInstaller] Проверка установки: OK');
-        } catch (installError) {
-            logger.error(`[AWGInstaller] Ошибка установки: ${installError.message}`);
-            throw new Error(`Не удалось установить wireguard-tools: ${installError.message}`);
-        }
-    }
-}
-
-/**
- * Генерация серверных ключей на хосте через nsenter
+ * Генерация серверных ключей на хосте через nsenter + chroot
+ * wireguard-tools должен быть установлен через install.sh
  * @returns {Promise<Object>} Объект с ключами
  */
 async function generateServerKeys() {
     logger.info('[AWGInstaller] Генерация ключей сервера на хосте...');
     
     try {
-        // Убеждаемся что wireguard-tools установлен
-        await ensureWireguardTools();
-        
-        // Генерируем приватный ключ на хосте
-        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/wg genkey');
+        // Генерируем приватный ключ на хосте через chroot к корневой ФС
+        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m chroot /proc/1/root wg genkey');
         
         // Генерируем публичный ключ из приватного на хосте
         const privKeyClean = privateKey.trim();
-        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m -u -n -i /usr/bin/wg pubkey`);
+        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m chroot /proc/1/root wg pubkey`);
         
         // Генерируем PresharedKey на хосте
-        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/wg genpsk');
+        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m chroot /proc/1/root wg genpsk');
         
         const keys = {
             privateKey: privKeyClean,
@@ -243,7 +210,7 @@ async function generateServerKeys() {
         return keys;
     } catch (error) {
         logger.error(`[AWGInstaller] Ошибка генерации ключей: ${error.message}`);
-        throw new Error(`Не удалось сгенерировать ключи на хосте: ${error.message}`);
+        throw new Error(`Не удалось сгенерировать ключи. Убедитесь что wireguard-tools установлен на хосте: apt-get install wireguard-tools`);
     }
 }
 
