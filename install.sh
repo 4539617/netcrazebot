@@ -71,29 +71,71 @@ BOT_DIR="/opt/netcrazybot"
 
 if [ -d "$BOT_DIR" ]; then
     log_warning "⚠️  Обнаружена старая установка"
-    log_info "Удаляю старую версию..."
-    
-    # Останавливаем и удаляем контейнер бота
-    docker stop netcrazybot 2>/dev/null || true
-    docker rm netcrazybot 2>/dev/null || true
-    docker rmi netcrazybot-netcrazybot 2>/dev/null || true
-    
-    # Останавливаем и удаляем AWG контейнеры
-    docker stop amnezia-awg 2>/dev/null || true
-    docker rm amnezia-awg 2>/dev/null || true
-    docker stop amnezia-awg2 2>/dev/null || true
-    docker rm amnezia-awg2 2>/dev/null || true
-    docker rmi amneziavpn/amnezia-wg:latest 2>/dev/null || true
-    
-    # Переходим в родительскую директорию перед удалением
-    cd /opt
-    
-    # Удаляем директории
-    rm -rf "$BOT_DIR"
-    rm -rf /opt/amnezia
-    
-    log_success "✅ Старая установка удалена (включая AWG серверы)"
     echo ""
+    echo "Что делать?"
+    echo "  1) Удалить и выйти"
+    echo "  2) Удалить и установить заново"
+    echo ""
+    read -p "Ваш выбор (1/2): " CHOICE
+    echo ""
+    
+    if [ "$CHOICE" = "1" ]; then
+        log_info "Удаление старой установки..."
+        
+        # Останавливаем и удаляем контейнер бота
+        docker stop netcrazybot 2>/dev/null || true
+        docker rm netcrazybot 2>/dev/null || true
+        docker rmi netcrazybot-netcrazybot 2>/dev/null || true
+        
+        # Останавливаем и удаляем AWG контейнеры
+        docker stop amnezia-awg 2>/dev/null || true
+        docker rm amnezia-awg 2>/dev/null || true
+        docker stop amnezia-awg2 2>/dev/null || true
+        docker rm amnezia-awg2 2>/dev/null || true
+        docker rmi amneziavpn/amnezia-wg:latest 2>/dev/null || true
+        
+        # Переходим в родительскую директорию перед удалением
+        cd /opt
+        
+        # Удаляем директории
+        rm -rf "$BOT_DIR"
+        rm -rf /opt/amnezia
+        
+        log_success "✅ Старая установка удалена"
+        echo ""
+        echo "Для новой установки запустите скрипт снова"
+        exit 0
+        
+    elif [ "$CHOICE" = "2" ]; then
+        log_info "Удаление старой установки..."
+        
+        # Останавливаем и удаляем контейнер бота
+        docker stop netcrazybot 2>/dev/null || true
+        docker rm netcrazybot 2>/dev/null || true
+        docker rmi netcrazybot-netcrazybot 2>/dev/null || true
+        
+        # Останавливаем и удаляем AWG контейнеры
+        docker stop amnezia-awg 2>/dev/null || true
+        docker rm amnezia-awg 2>/dev/null || true
+        docker stop amnezia-awg2 2>/dev/null || true
+        docker rm amnezia-awg2 2>/dev/null || true
+        docker rmi amneziavpn/amnezia-wg:latest 2>/dev/null || true
+        
+        # Переходим в родительскую директорию перед удалением
+        cd /opt
+        
+        # Удаляем директории
+        rm -rf "$BOT_DIR"
+        rm -rf /opt/amnezia
+        
+        log_success "✅ Старая установка удалена"
+        echo ""
+        log_info "Продолжаю установку..."
+        echo ""
+    else
+        log_error "Неверный выбор"
+        exit 1
+    fi
 fi
 
 # Убеждаемся что мы в /opt перед клонированием
@@ -109,13 +151,28 @@ echo ""
 log_info "Настройка конфигурации..."
 echo ""
 
-echo "Получите Bot Token у @BotFather в Telegram"
-read -p "Введите TELEGRAM_BOT_TOKEN: " BOT_TOKEN
-echo ""
-
-echo "Узнайте свой User ID у @userinfobot в Telegram"
-read -p "Введите ADMIN_IDS (через запятую): " ADMIN_IDS
-echo ""
+# Проверяем интерактивный режим
+if [ -t 0 ]; then
+    # Интерактивный режим - запрашиваем данные
+    echo "Получите Bot Token у @BotFather в Telegram"
+    read -p "Введите TELEGRAM_BOT_TOKEN: " BOT_TOKEN
+    echo ""
+    
+    echo "Узнайте свой User ID у @userinfobot в Telegram"
+    read -p "Введите ADMIN_IDS (через запятую): " ADMIN_IDS
+    echo ""
+else
+    # Неинтерактивный режим (curl | bash)
+    log_error "❌ Скрипт запущен в неинтерактивном режиме!"
+    echo ""
+    echo "Для установки выполните следующие команды:"
+    echo ""
+    echo "  wget https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh"
+    echo "  chmod +x install.sh"
+    echo "  sudo ./install.sh"
+    echo ""
+    exit 1
+fi
 
 # Создание .env файла
 log_info "Создание .env файла..."

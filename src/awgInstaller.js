@@ -192,27 +192,27 @@ async function generateServerKeys() {
     try {
         // Проверяем наличие wireguard-tools на хосте
         try {
-            await execAsync('nsenter -t 1 -m chroot /proc/1/root which wg');
+            await execAsync('nsenter -t 1 -m chroot /proc/1/root /usr/bin/which wg');
             logger.info('[AWGInstaller] wireguard-tools найден на хосте');
         } catch (error) {
             logger.warn('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
             
-            // Устанавливаем wireguard-tools на хосте
-            await execAsync('nsenter -t 1 -m chroot /proc/1/root apt-get update -qq');
-            await execAsync('nsenter -t 1 -m chroot /proc/1/root apt-get install -y -qq wireguard-tools');
+            // Устанавливаем wireguard-tools на хосте с полными путями
+            await execAsync('nsenter -t 1 -m chroot /proc/1/root /usr/bin/apt-get update -qq');
+            await execAsync('nsenter -t 1 -m chroot /proc/1/root /usr/bin/apt-get install -y -qq wireguard-tools');
             
             logger.info('[AWGInstaller] wireguard-tools успешно установлен на хосте');
         }
         
         // Генерируем приватный ключ на хосте через chroot к корневой ФС
-        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m chroot /proc/1/root wg genkey');
+        const { stdout: privateKey } = await execAsync('nsenter -t 1 -m chroot /proc/1/root /usr/bin/wg genkey');
         
         // Генерируем публичный ключ из приватного на хосте
         const privKeyClean = privateKey.trim();
-        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m chroot /proc/1/root wg pubkey`);
+        const { stdout: publicKey } = await execAsync(`echo "${privKeyClean}" | nsenter -t 1 -m chroot /proc/1/root /usr/bin/wg pubkey`);
         
         // Генерируем PresharedKey на хосте
-        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m chroot /proc/1/root wg genpsk');
+        const { stdout: presharedKey } = await execAsync('nsenter -t 1 -m chroot /proc/1/root /usr/bin/wg genpsk');
         
         const keys = {
             privateKey: privKeyClean,

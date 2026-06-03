@@ -1,14 +1,10 @@
 # NetCrazyBot
 
-Telegram бот для управления серверами.
+Telegram бот для управления AmneziaWG серверами.
 
-## Установка
+## 📦 Установка
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh | sudo bash
-```
-
-### Или скачать и запустить
+**Важно:** Скрипт требует интерактивного ввода данных!
 
 ```bash
 wget https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh
@@ -16,15 +12,19 @@ chmod +x install.sh
 sudo ./install.sh
 ```
 
-## 🔄 Обновление бота
+Во время установки вам нужно будет ввести:
+- `TELEGRAM_BOT_TOKEN` - получите у [@BotFather](https://t.me/BotFather)
+- `ADMIN_IDS` - ваш Telegram User ID (узнайте у [@userinfobot](https://t.me/userinfobot))
 
-Для обновления бота до последней версии запустите тот же скрипт установки:
+## 🔄 Переустановка
+
+Скрипт автоматически удаляет старую версию (включая AWG серверы) и устанавливает новую:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh | sudo bash
+wget https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh
+chmod +x install.sh
+sudo ./install.sh
 ```
-
-Выберите вариант **1** - обновление сохранит все настройки и данные.
 
 ## 🔧 Управление ботом
 
