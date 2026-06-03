@@ -17,7 +17,7 @@
 
 ```bash
 # 1. Скачайте скрипт установки
-wget https://raw.githubusercontent.com/your-repo/netcrazybot/main/install.sh
+wget https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh
 
 # 2. Сделайте скрипт исполняемым
 chmod +x install.sh
@@ -89,7 +89,7 @@ sudo mkdir -p /opt/netcrazybot
 cd /opt/netcrazybot
 
 # Если у вас есть Git репозиторий:
-git clone https://github.com/your-repo/netcrazybot.git .
+git clone https://github.com/4539617/netcrazebot.git .
 
 # Или скопируйте файлы вручную
 ```
