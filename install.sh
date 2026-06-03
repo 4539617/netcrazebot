@@ -73,20 +73,26 @@ if [ -d "$BOT_DIR" ]; then
     log_warning "⚠️  Обнаружена старая установка"
     log_info "Удаляю старую версию..."
     
-    # Останавливаем и удаляем контейнер
+    # Останавливаем и удаляем контейнер бота
     docker stop netcrazybot 2>/dev/null || true
     docker rm netcrazybot 2>/dev/null || true
-    
-    # Удаляем образ
     docker rmi netcrazybot-netcrazybot 2>/dev/null || true
+    
+    # Останавливаем и удаляем AWG контейнеры
+    docker stop amnezia-awg 2>/dev/null || true
+    docker rm amnezia-awg 2>/dev/null || true
+    docker stop amnezia-awg2 2>/dev/null || true
+    docker rm amnezia-awg2 2>/dev/null || true
+    docker rmi amneziavpn/amnezia-wg:latest 2>/dev/null || true
     
     # Переходим в родительскую директорию перед удалением
     cd /opt
     
-    # Удаляем директорию
+    # Удаляем директории
     rm -rf "$BOT_DIR"
+    rm -rf /opt/amnezia
     
-    log_success "✅ Старая установка удалена"
+    log_success "✅ Старая установка удалена (включая AWG серверы)"
     echo ""
 fi
 
