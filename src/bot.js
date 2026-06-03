@@ -45,19 +45,12 @@ export class RouteBot {
       logger.info(`/start command received from chat ${chatId}`);
       
       let welcomeMessage = `
-🚀 *Добро пожаловать!*
-
-*Как использовать:*
-Отправьте один домен: \`rutube.ru\`
-или
-Отправьте несколько доменов (каждый с новой строки):
+🚀 *Отправьте*
 \`\`\`
 rutube.ru
 ozon.ru
 google.com
 \`\`\`
-
-*Команды:*
 /start - Начало работы`;
 
       // Add admin command for administrators
@@ -101,7 +94,7 @@ google.com
       );
     });
 
-    // AWG stats command (admin only)
+    // Stats command (admin only)
     this.bot.onText(/\/awgstats/, async (msg) => {
       const chatId = msg.chat.id;
       
@@ -346,7 +339,7 @@ google.com
         logger.warn(`Invalid domains from chat ${chatId}: ${invalidDomains.join(', ')}`);
         this.bot.sendMessage(
           chatId,
-          `❌ Неправильный формат доменов:\n${invalidDomains.join('\n')}\n\n` +
+          `❌ Неправильный формат:\n${invalidDomains.join('\n')}\n\n` +
           `/start - Начало работы`,
           { parse_mode: 'Markdown' }
         );
@@ -516,7 +509,7 @@ google.com
 
   async processAwgConfig(chatId, document) {
     try {
-      logger.info(`Processing AWG .conf file from chat ${chatId}: ${document.file_name}`);
+      logger.info(`Processing .conf file from chat ${chatId}: ${document.file_name}`);
       
       // Check anti-flood
       const userId = chatId;
@@ -534,7 +527,7 @@ google.com
       // Send processing message
       const processingMsg = await this.bot.sendMessage(
         chatId,
-        `⏳ Обрабатываю конфигурацию AmneziaWG ${document.file_name}...`
+        `⏳ Обрабатываю конфигурацию ${document.file_name}...`
       );
 
       // Download file
@@ -554,7 +547,7 @@ google.com
       logger.info(`Saved temp file: ${tempFilePath}`);
 
       // Process the file
-      logger.info(`Starting AWG config processing for chat ${chatId}`);
+      logger.info(`Starting config processing for chat ${chatId}`);
       const result = await processAwgConfig(tempFilePath, document.file_name);
 
       // Delete temp file
@@ -566,7 +559,7 @@ google.com
 
       // Send processed file
       await this.bot.sendDocument(chatId, result.outputPath);
-      logger.info(`Sent processed AWG config to chat ${chatId}: ${result.outputPath}`);
+      logger.info(`Sent processed config to chat ${chatId}: ${result.outputPath}`);
 
       // Send information message
       let infoMessage = '';
@@ -575,28 +568,23 @@ google.com
         infoMessage = `
 ✅ *Конвертация завершена!*
 
-📋 Исходная версия: AmneziaWG v${result.version}
-🔄 Конвертировано в: AmneziaWG v1
-
-⚠️ *Важно:*
-• H-параметры преобразованы из диапазонов в фиксированные значения
-• Параметры S3 и S4 удалены (не используются в v1)
-• Проверьте работоспособность конфигурации перед использованием
+📋 Исходная версия v${result.version}
+🔄 Конвертировано v1
         `;
       } else {
         infoMessage = `
 ✅ *Проверка завершена!*
 
-📋 Версия: AmneziaWG v${result.version}
+📋 Версия v${result.version}
 ℹ️ Конфигурация уже в формате v1, конвертация не требуется
         `;
       }
 
       this.bot.sendMessage(chatId, infoMessage, { parse_mode: 'Markdown' });
-      logger.info(`AWG config processing completed for chat ${chatId}. Version: ${result.version}, Converted: ${result.converted}`);
+      logger.info(`Config processing completed for chat ${chatId}. Version: ${result.version}, Converted: ${result.converted}`);
 
     } catch (error) {
-      logger.error(`Error processing AWG .conf file for chat ${chatId}:`, error);
+      logger.error(`Error processing .conf file for chat ${chatId}:`, error);
       this.bot.sendMessage(
         chatId,
         `❌ Произошла ошибка при обработке конфигурации: ${error.message}`
@@ -618,7 +606,7 @@ google.com
 
       this.bot.sendMessage(
         chatId,
-        '🔧 *Конфигурации AWG*\n\nВыберите версию:',
+        '🔧 *Конфигурации *\n\nВыберите версию:',
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
     } catch (error) {
@@ -639,10 +627,10 @@ google.com
       
       await this.bot.sendMessage(
         chatId,
-        `📝 *Введите метку VPS сервера*\n\n` +
-        `Например: \`JONS\`, \`SERVER1\`, \`VPS-NY\`\n\n` +
+        `📝 *Введите метку сервера*\n\n` +
+        `Например: \`XYZ\`, \`SERVER1\`, \`VPS-NY\`\n\n` +
         `Эта метка будет добавлена к имени файла конфигурации.\n` +
-        `Пример: \`JONS_AWGv1_10_8_1_1.conf\``,
+        `Пример: \`XYZ_AWGv1_10_8_1_1.conf\``,
         { parse_mode: 'Markdown' }
       );
     } catch (error) {
@@ -690,14 +678,14 @@ google.com
 
   async generateAwgConfig(chatId, version, vpsLabel = null) {
     try {
-      logger.info(`Generating AWG ${version} config for chat ${chatId}`);
+      logger.info(`Generating ${version} config for chat ${chatId}`);
       
       // Check anti-flood
       const userId = chatId;
       const limitCheck = this.antiFlood.checkLimit(userId);
       
       if (!limitCheck.allowed) {
-        logger.warn(`Anti-flood triggered for AWG generation from chat ${chatId}`);
+        logger.warn(`Anti-flood triggered for generation from chat ${chatId}`);
         this.bot.sendMessage(
           chatId,
           `⏳ Слишком много запросов. Подождите ${limitCheck.remainingTime} секунд.`
@@ -708,7 +696,7 @@ google.com
       // Send processing message
       const processingMsg = await this.bot.sendMessage(
         chatId,
-        `⏳ Генерирую конфигурацию AmneziaWG ${version.toUpperCase()}...\n` +
+        `⏳ Генерирую конфигурацию ${version.toUpperCase()}...\n` +
         `Это может занять несколько секунд...`
       );
 
@@ -720,24 +708,22 @@ google.com
 
       // Send config file
       await this.bot.sendDocument(chatId, result.filepath);
-      logger.info(`Sent AWG ${version} config to chat ${chatId}: ${result.filename}`);
+      logger.info(`Sent ${version} config to chat ${chatId}: ${result.filename}`);
 
     } catch (error) {
-      logger.error(`Error generating AWG ${version} config for chat ${chatId}:`, error);
+      logger.error(`Error generating ${version} config for chat ${chatId}:`, error);
       this.bot.sendMessage(
         chatId,
         `❌ Ошибка при генерации конфигурации: ${error.message}\n\n` +
         `Убедитесь, что:\n` +
-        `• Docker-контейнер AWG запущен\n` +
-        `• Установлен wireguard-tools (wg команда)\n` +
-        `• Есть свободные IP-адреса в пуле`
+        `• Docker-контейнер запущен\n`
       );
     }
   }
 
   async showAwgStats(chatId) {
     try {
-      logger.info(`Showing AWG stats for chat ${chatId}`);
+      logger.info(`Showing stats for chat ${chatId}`);
 
       const processingMsg = await this.bot.sendMessage(chatId, '⏳ Получаю статистику...');
 
@@ -748,16 +734,16 @@ google.com
       if (stats.length === 0) {
         this.bot.sendMessage(
           chatId,
-          `📊 *Статистика AmneziaWG серверов*\n\n❌ Контейнеры AWG не найдены.\n\nУбедитесь, что контейнеры запущены:\n\`docker ps | grep amnezia\``,
+          `📊 *Статистика серверов*\n\n❌ Контейнеры AWG не найдены.\n\nУбедитесь, что контейнеры запущены\n\`\``,
           { parse_mode: 'Markdown' }
         );
         return;
       }
 
-      let statsMessage = '📊 *Статистика AmneziaWG серверов*\n\n';
+      let statsMessage = '📊 *Статистика серверов*\n\n';
       
       for (const container of stats) {
-        const versionLabel = container.version === 'v1' ? 'Версия 1 (Keenetic)' : 'Версия 2 (Новые)';
+        const versionLabel = container.version === 'v1' ? 'v1' : 'v2';
         statsMessage += `*${versionLabel}:*\n`;
         statsMessage += `${container.running ? '✅ Работает' : '❌ Не работает'}\n`;
         statsMessage += `📦 Контейнер: \`${container.name}\`\n`;
@@ -768,7 +754,7 @@ google.com
       this.bot.sendMessage(chatId, statsMessage, { parse_mode: 'Markdown' });
 
     } catch (error) {
-      logger.error(`Error showing AWG stats for chat ${chatId}:`, error);
+      logger.error(`Error showing stats for chat ${chatId}:`, error);
       this.bot.sendMessage(
         chatId,
         `❌ Ошибка при получении статистики: ${error.message}`
@@ -782,7 +768,7 @@ google.com
       const keyboard = {
         inline_keyboard: [
           [
-            { text: '📱 Клиенты v1', callback_data: 'awg_clients_v1' },
+            { text: '🚀 Клиенты v1', callback_data: 'awg_clients_v1' },
             { text: '🚀 Клиенты v2', callback_data: 'awg_clients_v2' }
           ]
         ]
@@ -795,7 +781,7 @@ google.com
       );
 
     } catch (error) {
-      logger.error(`Error showing AWG clients menu for chat ${chatId}:`, error);
+      logger.error(`Error showing clients menu for chat ${chatId}:`, error);
       this.bot.sendMessage(
         chatId,
         `❌ Ошибка: ${error.message}`
@@ -805,7 +791,7 @@ google.com
 
   async showAwgClientsList(chatId, version) {
     try {
-      logger.info(`Showing AWG ${version} clients list for chat ${chatId}`);
+      logger.info(`Showing ${version} clients list for chat ${chatId}`);
 
       const processingMsg = await this.bot.sendMessage(chatId, '⏳ Получаю список клиентов...');
 
@@ -871,7 +857,7 @@ google.com
       });
 
     } catch (error) {
-      logger.error(`Error showing AWG ${version} clients list for chat ${chatId}:`, error);
+      logger.error(`Error showing ${version} clients list for chat ${chatId}:`, error);
       this.bot.sendMessage(
         chatId,
         `❌ Ошибка при получении списка клиентов: ${error.message}`
@@ -955,7 +941,7 @@ google.com
         `Вы уверены что хотите удалить клиента \`${ip}\` из ${version.toUpperCase()}?\n\n` +
         `Это действие:\n` +
         `• Удалит клиента из конфигурации сервера\n` +
-        `• Перезапустит контейнер AWG\n` +
+        `• Перезапустит контейнер\n` +
         `• Сохранённый файл конфигурации останется`,
         {
           parse_mode: 'Markdown',
@@ -1085,12 +1071,12 @@ google.com
     let message = '📊 *Статус серверов:*\n\n';
     
     message += status.v1.installed 
-      ? `✅ AWG v1 установлен (порт: ${status.v1.port})\n`
-      : '❌ AWG v1 не установлен\n';
+      ? `✅ v1 установлен (порт: ${status.v1.port})\n`
+      : '❌ v1 не установлен\n';
       
     message += status.v2.installed
-      ? `✅ AWG v2 установлен (порт: ${status.v2.port})\n`
-      : '❌ AWG v2 не установлен\n';
+      ? `✅ v2 установлен (порт: ${status.v2.port})\n`
+      : '❌ v2 не установлен\n';
     
     if (status.v1.installed || status.v2.installed) {
       message += '\n*Что делать?*';
@@ -1290,7 +1276,7 @@ google.com
         
         if (result) {
           await this.bot.editMessageText(
-            `✅ Сервер AWG ${version} успешно удалён!\n\n` +
+            `✅ Сервер ${version} успешно удалён!\n\n` +
             `• Контейнер остановлен и удалён\n` +
             `• Конфигурация удалена`,
             {
@@ -1321,8 +1307,8 @@ google.com
         if (result1 && result2) {
           await this.bot.editMessageText(
             `✅ Оба сервера успешно удалены!\n\n` +
-            `• AWG v1: контейнер и конфигурация удалены\n` +
-            `• AWG v2: контейнер и конфигурация удалены`,
+            `• v1: контейнер и конфигурация удалены\n` +
+            `• v2: контейнер и конфигурация удалены`,
             {
               chat_id: chatId,
               message_id: messageId
@@ -1331,8 +1317,8 @@ google.com
         } else {
           await this.bot.editMessageText(
             `⚠️ Удаление завершено с ошибками\n\n` +
-            `• AWG v1: ${result1 ? '✅ удалён' : '❌ ошибка'}\n` +
-            `• AWG v2: ${result2 ? '✅ удалён' : '❌ ошибка'}`,
+            `• v1: ${result1 ? '✅ удалён' : '❌ ошибка'}\n` +
+            `• v2: ${result2 ? '✅ удалён' : '❌ ошибка'}`,
             {
               chat_id: chatId,
               message_id: messageId
@@ -1359,7 +1345,7 @@ google.com
     try {
       const info = await awgInstaller.getServerInfo(version);
       
-      const message = `⚠️ *Внимание!*\n\nВы собираетесь удалить AWG ${version}:\n• Контейнер: \`${info.containerName}\`\n• Порт: ${info.port}\n• Клиентов: ${info.clientCount}\n\n❗ Все клиенты потеряют доступ!\n\nПродолжить?`;
+      const message = `⚠️ *Внимание!*\n\nВы собираетесь удалить ${version}:\n• Контейнер: \`${info.containerName}\`\n• Порт: ${info.port}\n• Клиентов: ${info.clientCount}\n\n❗ Все клиенты потеряют доступ!\n\nПродолжить?`;
       
       const keyboard = [
         [
@@ -1388,7 +1374,7 @@ google.com
       
       const totalClients = v1Info.clientCount + v2Info.clientCount;
       
-      const message = `⚠️ *Внимание!*\n\nВы собираетесь удалить ОБА сервера:\n\n*AWG v1:*\n• Контейнер: \`${v1Info.containerName}\`\n• Порт: ${v1Info.port}\n• Клиентов: ${v1Info.clientCount}\n\n*AWG v2:*\n• Контейнер: \`${v2Info.containerName}\`\n• Порт: ${v2Info.port}\n• Клиентов: ${v2Info.clientCount}\n\n❗ Всего ${totalClients} клиентов потеряют доступ!\n\nПродолжить?`;
+      const message = `⚠️ *Внимание!*\n\nВы собираетесь удалить ОБА сервера:\n\n*v1:*\n• Контейнер: \`${v1Info.containerName}\`\n• Порт: ${v1Info.port}\n• Клиентов: ${v1Info.clientCount}\n\n*v2:*\n• Контейнер: \`${v2Info.containerName}\`\n• Порт: ${v2Info.port}\n• Клиентов: ${v2Info.clientCount}\n\n❗ Всего ${totalClients} клиентов потеряют доступ!\n\nПродолжить?`;
       
       const keyboard = [
         [
@@ -1443,7 +1429,7 @@ google.com
       
       const totalClients = v1Info.clientCount + v2Info.clientCount;
       
-      const message = `⚠️ *ВНИМАНИЕ!*\n\nВы собираетесь ПОЛНОСТЬЮ УДАЛИТЬ оба сервера:\n\n*AWG v1:*\n• Контейнер: \`${v1Info.containerName}\`\n• Порт: ${v1Info.port}\n• Клиентов: ${v1Info.clientCount}\n\n*AWG v2:*\n• Контейнер: \`${v2Info.containerName}\`\n• Порт: ${v2Info.port}\n• Клиентов: ${v2Info.clientCount}\n\n❗ Всего ${totalClients} клиентов потеряют доступ!\n❗ Серверы будут полностью удалены!\n\nПродолжить?`;
+      const message = `⚠️ *ВНИМАНИЕ!*\n\nВы собираетесь ПОЛНОСТЬЮ УДАЛИТЬ оба сервера:\n\n*v1:*\n• Контейнер: \`${v1Info.containerName}\`\n• Порт: ${v1Info.port}\n• Клиентов: ${v1Info.clientCount}\n\n*v2:*\n• Контейнер: \`${v2Info.containerName}\`\n• Порт: ${v2Info.port}\n• Клиентов: ${v2Info.clientCount}\n\n❗ Всего ${totalClients} клиентов потеряют доступ!\n❗ Серверы будут полностью удалены!\n\nПродолжить?`;
       
       const keyboard = [
         [
@@ -1547,9 +1533,9 @@ google.com
         let message = '';
         
         if (version === 'both') {
-          message = `✅ *Установка завершена!*\n\n*AWG v1:*\n• Порт: ${result.results.v1.port}\n• Контейнер: \`${result.results.v1.containerName}\`\n• Конфиг: \`${result.results.v1.configPath}\`\n\n*AWG v2:*\n• Порт: ${result.results.v2.port}\n• Контейнер: \`${result.results.v2.containerName}\`\n• Конфиг: \`${result.results.v2.configPath}\`\n\nТеперь можно создавать клиентов через /admin`;
+          message = `✅ *Установка завершена!*\n\n*v1:*\n• Порт: ${result.results.v1.port}\n• Контейнер: \`${result.results.v1.containerName}\`\n• Конфиг: \`${result.results.v1.configPath}\`\n\n*v2:*\n• Порт: ${result.results.v2.port}\n• Контейнер: \`${result.results.v2.containerName}\`\n• Конфиг: \`${result.results.v2.configPath}\`\n\nТеперь можно создавать клиентов через /admin`;
         } else {
-          message = `✅ *Установка AWG ${version} завершена!*\n\n📋 *Детали:*\n• Версия: ${version}\n• Порт: ${port}\n• Контейнер: \`${result.containerName}\`\n• Конфиг: \`${result.configPath}\`\n• Клиентов: 0\n\nТеперь можно создавать клиентов через /admin`;
+          message = `✅ *Установка ${version} завершена!*\n\n📋 *Детали:*\n• Версия: ${version}\n• Порт: ${port}\n• Контейнер: \`${result.containerName}\`\n• Конфиг: \`${result.configPath}\`\n• Клиентов: 0\n\nТеперь можно создавать клиентов через /admin`;
         }
         
         await this.bot.editMessageText(message, {
@@ -1594,7 +1580,7 @@ google.com
     if (config.adminIds.length > 0) {
       logger.info(`Admin IDs: ${config.adminIds.join(', ')}`);
     } else {
-      logger.warn('No admin IDs configured! AWG features will be unavailable.');
+      logger.warn('No admin IDs configured! features will be unavailable.');
     }
     logger.info('Waiting for messages...');
   }

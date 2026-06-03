@@ -4,12 +4,9 @@ Telegram бот для управления AmneziaWG серверами.
 
 ## 📦 Установка
 
-**Важно:** Скрипт требует интерактивного ввода данных!
 
 ```bash
-wget https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh
-chmod +x install.sh
-sudo ./install.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh)
 ```
 
 Во время установки вам нужно будет ввести:
@@ -18,12 +15,10 @@ sudo ./install.sh
 
 ## 🔄 Переустановка
 
-Скрипт автоматически удаляет старую версию (включая AWG серверы) и устанавливает новую:
+Скрипт автоматически удаляет старую версию и устанавливает новую:
 
 ```bash
-wget https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh
-chmod +x install.sh
-sudo ./install.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh)
 ```
 
 ## 🔧 Управление ботом
@@ -43,9 +38,19 @@ docker restart netcrazybot
 docker stop netcrazybot
 ```
 
+### Остановка всех контейнеров в docker-compose.yml
+```bash
+docker compose down
+```
+
 ### Запуск бота
 ```bash
 docker start netcrazybot
+```
+
+### Запуск всех контейнеров из docker-compose.yml
+```bash
+docker compose up -d --build
 ```
 
 ### Пересборка и перезапуск
