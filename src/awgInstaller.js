@@ -265,14 +265,21 @@ H4 = ${params.H4}
         // Создаём директорию
         await execAsync(`mkdir -p ${configPath}`);
         
+        // Для v2 используем awg0.conf, для v1 - wg0.conf
+        const configFileName = version === 'v2' ? 'awg0.conf' : 'wg0.conf';
+        
         // Записываем конфигурацию
-        await fs.writeFile(`${configPath}/wg0.conf`, config);
-        logger.info(`[AWGInstaller] Конфиг записан: ${configPath}/wg0.conf`);
+        await fs.writeFile(`${configPath}/${configFileName}`, config);
+        logger.info(`[AWGInstaller] Конфиг записан: ${configPath}/${configFileName}`);
         
         // Записываем ключи
         await fs.writeFile(`${configPath}/wireguard_server_private_key.key`, keys.privateKey);
         await fs.writeFile(`${configPath}/wireguard_server_public_key.key`, keys.publicKey);
         await fs.writeFile(`${configPath}/wireguard_psk.key`, keys.presharedKey);
+        
+        // Устанавливаем правильные права доступа
+        await execAsync(`chmod 600 ${configPath}/${configFileName}`);
+        await execAsync(`chmod 600 ${configPath}/*.key`);
         
         logger.info('[AWGInstaller] Конфигурация успешно создана');
     } catch (error) {
@@ -295,11 +302,16 @@ async function startContainer(version, port, configPath) {
     const dockerCmd = `docker run -d \
   --name ${container.name} \
   --restart=always \
+  --privileged \
   --cap-add=NET_ADMIN \
   --cap-add=SYS_MODULE \
+  --sysctl net.ipv4.conf.all.src_valid_mark=1 \
+  --sysctl net.ipv4.ip_forward=1 \
+  --sysctl net.ipv6.conf.all.forwarding=1 \
   -p ${port}:${port}/udp \
   -v ${configPath}:/opt/amnezia/awg \
   -v /lib/modules:/lib/modules:ro \
+  -v /dev/net/tun:/dev/net/tun \
   ${container.image}`;
     
     try {
