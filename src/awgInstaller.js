@@ -311,9 +311,9 @@ async function startContainer(version, port, configPath) {
   --sysctl net.ipv4.ip_forward=1 \
   --sysctl net.ipv6.conf.all.forwarding=1 \
   -p ${port}:${port}/udp \
-  -v ${configPath}:/opt/amnezia/awg \
+  -v ${configPath}:/etc/amnezia/amneziawg \
   -v /lib/modules:/lib/modules:ro \
-  -v /dev/net/tun:/dev/net/tun \
+  --device /dev/net/tun:/dev/net/tun \
   ${container.image}`;
     
     try {
