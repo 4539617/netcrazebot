@@ -190,6 +190,20 @@ async function generateServerKeys() {
     logger.info('[AWGInstaller] Генерация ключей сервера на хосте...');
     
     try {
+        // Проверяем наличие wireguard-tools на хосте
+        try {
+            await execAsync('nsenter -t 1 -m chroot /proc/1/root which wg');
+            logger.info('[AWGInstaller] wireguard-tools найден на хосте');
+        } catch (error) {
+            logger.warn('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
+            
+            // Устанавливаем wireguard-tools на хосте
+            await execAsync('nsenter -t 1 -m chroot /proc/1/root apt-get update -qq');
+            await execAsync('nsenter -t 1 -m chroot /proc/1/root apt-get install -y -qq wireguard-tools');
+            
+            logger.info('[AWGInstaller] wireguard-tools успешно установлен на хосте');
+        }
+        
         // Генерируем приватный ключ на хосте через chroot к корневой ФС
         const { stdout: privateKey } = await execAsync('nsenter -t 1 -m chroot /proc/1/root wg genkey');
         
@@ -210,7 +224,7 @@ async function generateServerKeys() {
         return keys;
     } catch (error) {
         logger.error(`[AWGInstaller] Ошибка генерации ключей: ${error.message}`);
-        throw new Error(`Не удалось сгенерировать ключи. Убедитесь что wireguard-tools установлен на хосте: apt-get install wireguard-tools`);
+        throw new Error(`Не удалось сгенерировать ключи. Ошибка: ${error.message}`);
     }
 }
 
