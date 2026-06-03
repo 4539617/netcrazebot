@@ -67,8 +67,49 @@ echo ""
 BOT_DIR="/opt/netcrazybot"
 
 if [ -d "$BOT_DIR" ]; then
-    log_warning "Директория $BOT_DIR уже существует - выполняю обновление"
-    log_info "Обновление бота..."
+    log_warning "Директория $BOT_DIR уже существует"
+    echo ""
+    echo "Выберите действие:"
+    echo "  1) Обновить (сохранить .env и обновить код)"
+    echo "  2) Полная переустановка (удалить ВСЁ и настроить заново)"
+    echo "  3) Отмена"
+    echo ""
+    read -p "Ваш выбор (1/2/3): " CHOICE
+    echo ""
+    
+    if [ "$CHOICE" = "2" ]; then
+        log_warning "⚠️  ПОЛНАЯ ПЕРЕУСТАНОВКА - будет удалено:"
+        echo "  • Контейнер netcrazybot"
+        echo "  • Директория /opt/netcrazybot"
+        echo "  • Все настройки (.env)"
+        echo ""
+        read -p "Продолжить? (yes/no): " CONFIRM
+        echo ""
+        
+        if [ "$CONFIRM" != "yes" ]; then
+            log_error "Отменено пользователем"
+            exit 1
+        fi
+        
+        log_info "Удаление старой установки..."
+        
+        # Останавливаем и удаляем контейнер
+        docker stop netcrazybot 2>/dev/null || true
+        docker rm netcrazybot 2>/dev/null || true
+        
+        # Удаляем образ
+        docker rmi netcrazybot-netcrazybot 2>/dev/null || true
+        
+        # Удаляем директорию
+        rm -rf "$BOT_DIR"
+        
+        log_success "Старая установка полностью удалена"
+        echo ""
+        
+        # Продолжаем как новая установка (переходим к клонированию)
+        
+    elif [ "$CHOICE" = "1" ]; then
+        log_info "Обновление бота..."
     
     # Сохраняем .env файл
     if [ -f "$BOT_DIR/.env" ]; then
@@ -145,6 +186,11 @@ if [ -d "$BOT_DIR" ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     exit 0
+    
+    else
+        log_error "Установка отменена"
+        exit 1
+    fi
 fi
 
 log_info "Клонирование репозитория..."
