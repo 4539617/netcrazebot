@@ -18,10 +18,13 @@ log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Проверка root
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
     log_error "Запустите скрипт с правами root: sudo $0"
     exit 1
 fi
+
+# Переходим в безопасную директорию в самом начале
+cd /tmp
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 log_info "NetCrazyBot - Установка"
