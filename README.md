@@ -5,8 +5,6 @@ Telegram бот для управления серверами.
 ## Установка
 
 ```bash
-
-```bash
 curl -fsSL https://raw.githubusercontent.com/4539617/netcrazebot/main/install.sh | sudo bash
 ```
 
