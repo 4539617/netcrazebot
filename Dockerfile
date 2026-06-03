@@ -4,6 +4,9 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
+# Install Docker CLI and curl (needed for AWG management)
+RUN apk add --no-cache docker-cli curl
+
 # Copy package files
 COPY package*.json ./
 

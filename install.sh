@@ -1,158 +1,248 @@
 #!/bin/bash
 
 # NetCrazyBot Installation Script
-# Автоматическая установка и настройка бота на VPS сервере
+# Автоматическая установка бота на новый сервер
 
-set -e
+set -e  # Остановка при ошибке
 
 # Цвета для вывода
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Функция для вывода сообщений
-print_message() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-print_warning() {
+log_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
 # Проверка прав root
 if [ "$EUID" -ne 0 ]; then 
-    print_error "Пожалуйста, запустите скрипт с правами root (sudo)"
+    log_error "Пожалуйста, запустите скрипт с правами root (sudo)"
     exit 1
 fi
 
-print_message "🚀 Начинаем установку NetCrazyBot..."
+log_info "Начало установки NetCrazyBot..."
+echo ""
 
 # 1. Обновление системы
-print_message "Обновление системы..."
-apt update && apt upgrade -y
+log_info "Обновление системы..."
+apt-get update -qq
+apt-get upgrade -y -qq
+log_success "Система обновлена"
+echo ""
 
-# 2. Установка Docker
-print_message "Проверка установки Docker..."
+# 2. Установка необходимых пакетов
+log_info "Установка необходимых пакетов..."
+apt-get install -y -qq \
+    curl \
+    git \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    wireguard-tools \
+    net-tools
+log_success "Пакеты установлены"
+echo ""
+
+# 3. Установка Docker
 if ! command -v docker &> /dev/null; then
-    print_message "Установка Docker..."
-    apt install -y apt-transport-https ca-certificates curl software-properties-common
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    apt update
-    apt install -y docker-ce docker-ce-cli containerd.io
-    systemctl enable docker
+    log_info "Установка Docker..."
+    
+    # Добавление официального GPG ключа Docker
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    
+    # Добавление репозитория Docker
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+      $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Установка Docker
+    apt-get update -qq
+    apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # Запуск Docker
     systemctl start docker
-    print_message "✅ Docker установлен"
+    systemctl enable docker
+    
+    log_success "Docker установлен и запущен"
 else
-    print_message "✅ Docker уже установлен"
+    log_success "Docker уже установлен"
 fi
+echo ""
 
-# 3. Установка Git
-print_message "Проверка установки Git..."
-if ! command -v git &> /dev/null; then
-    print_message "Установка Git..."
-    apt install -y git
-    print_message "✅ Git установлен"
+# 4. Установка Node.js 20.x
+if ! command -v node &> /dev/null; then
+    log_info "Установка Node.js 20.x..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y -qq nodejs
+    log_success "Node.js $(node -v) установлен"
 else
-    print_message "✅ Git уже установлен"
+    log_success "Node.js $(node -v) уже установлен"
 fi
+echo ""
 
-# 4. Создание директории для бота
-INSTALL_DIR="/opt/netcrazybot"
-print_message "Создание директории $INSTALL_DIR..."
-mkdir -p $INSTALL_DIR
-cd $INSTALL_DIR
-
-# 5. Клонирование репозитория
-print_message "Клонирование репозитория..."
-if [ -d ".git" ]; then
-    print_warning "Репозиторий уже существует, обновляем..."
-    git pull origin main
+# 5. Клонирование репозитория (если не существует)
+BOT_DIR="/opt/netcrazybot"
+if [ ! -d "$BOT_DIR" ]; then
+    log_info "Создание директории для бота..."
+    mkdir -p "$BOT_DIR"
+    log_success "Директория создана: $BOT_DIR"
 else
-    git clone https://gitlab.com/kosmostar777/netcrazybot.git .
+    log_warning "Директория уже существует: $BOT_DIR"
 fi
+echo ""
 
-# 6. Запрос токена бота
-print_message ""
-print_message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-print_message "Для работы бота необходим Telegram Bot Token"
-print_message "Получите его у @BotFather в Telegram:"
-print_message "1. Откройте @BotFather"
-print_message "2. Отправьте /newbot"
-print_message "3. Следуйте инструкциям"
-print_message "4. Скопируйте полученный токен"
-print_message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-print_message ""
+# 6. Запрос конфигурации
+log_info "Настройка конфигурации..."
+echo ""
 
 read -p "Введите Telegram Bot Token: " BOT_TOKEN
-
-if [ -z "$BOT_TOKEN" ]; then
-    print_error "Токен не может быть пустым!"
-    exit 1
-fi
+read -p "Введите Admin ID (Telegram User ID): " ADMIN_ID
+read -p "Введите IP адрес сервера: " SERVER_IP
 
 # 7. Создание .env файла
-print_message "Создание .env файла..."
-cat > .env << EOF
-# Telegram Bot Token
-# Get it from @BotFather on Telegram
+log_info "Создание .env файла..."
+cat > "$BOT_DIR/.env" << EOF
+# Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+
+# Admin Configuration
+ADMIN_IDS=$ADMIN_ID
+
+# Server Configuration
+SERVER_IP=$SERVER_IP
+
+# Output Directory
+OUTPUT_DIR=/opt/netcrazybot/output
+
+# Log Level
+LOG_LEVEL=info
 EOF
+log_success ".env файл создан"
+echo ""
 
-print_message "✅ .env файл создан"
+# 8. Создание docker-compose.yml
+log_info "Создание docker-compose.yml..."
+cat > "$BOT_DIR/docker-compose.yml" << 'EOF'
+version: '3.8'
 
-# 8. Остановка старого контейнера (если есть)
-print_message "Остановка старого контейнера (если есть)..."
-docker stop netcrazybot 2>/dev/null || true
-docker rm netcrazybot 2>/dev/null || true
+services:
+  bot:
+    build: .
+    container_name: netcrazybot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./output:/app/output
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/amnezia:/opt/amnezia
+    network_mode: host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+EOF
+log_success "docker-compose.yml создан"
+echo ""
 
-# 9. Сборка Docker образа
-print_message "Сборка Docker образа..."
-docker build -t netcrazybot .
-
-# 10. Запуск контейнера
-print_message "Запуск контейнера..."
-docker run -d --name netcrazybot --restart unless-stopped \
-  -v $INSTALL_DIR/output:/app/output \
-  --env-file .env \
-  netcrazybot
-
-# 11. Ожидание запуска
-print_message "Ожидание запуска бота..."
-sleep 5
-
-# 12. Проверка статуса
-print_message "Проверка статуса..."
-if docker ps | grep -q netcrazybot; then
-    print_message "✅ Бот успешно запущен!"
-    print_message ""
-    print_message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_message "🎉 Установка завершена успешно!"
-    print_message ""
-    print_message "Полезные команды:"
-    print_message "  Просмотр логов:    docker logs -f netcrazybot"
-    print_message "  Перезапуск:        docker restart netcrazybot"
-    print_message "  Остановка:         docker stop netcrazybot"
-    print_message "  Запуск:            docker start netcrazybot"
-    print_message "  Статус:            docker ps | grep netcrazybot"
-    print_message ""
-    print_message "Директория бота: $INSTALL_DIR"
-    print_message "Файлы сохраняются в: $INSTALL_DIR/output"
-    print_message ""
-    print_message "Бот автоматически запустится при перезагрузке сервера!"
-    print_message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_message ""
-    print_message "Последние логи:"
-    docker logs --tail 20 netcrazybot
+# 9. Копирование исходного кода (если запущено из директории проекта)
+if [ -f "package.json" ]; then
+    log_info "Копирование исходного кода..."
+    cp -r . "$BOT_DIR/"
+    log_success "Исходный код скопирован"
 else
-    print_error "❌ Ошибка запуска бота!"
-    print_error "Проверьте логи: docker logs netcrazybot"
-    exit 1
+    log_warning "Исходный код не найден в текущей директории"
+    log_info "Пожалуйста, скопируйте файлы проекта в $BOT_DIR"
 fi
+echo ""
+
+# 10. Создание директории для вывода
+log_info "Создание директории для файлов..."
+mkdir -p "$BOT_DIR/output"
+chmod 755 "$BOT_DIR/output"
+log_success "Директория создана: $BOT_DIR/output"
+echo ""
+
+# 11. Создание директорий для AWG
+log_info "Создание директорий для AWG..."
+mkdir -p /opt/amnezia/amnezia-awg
+mkdir -p /opt/amnezia/amnezia-awg2
+chmod 755 /opt/amnezia
+log_success "Директории AWG созданы"
+echo ""
+
+# 12. Сборка и запуск Docker контейнера
+cd "$BOT_DIR"
+if [ -f "Dockerfile" ]; then
+    log_info "Сборка Docker образа..."
+    docker compose build
+    log_success "Docker образ собран"
+    echo ""
+    
+    log_info "Запуск бота..."
+    docker compose up -d
+    log_success "Бот запущен"
+else
+    log_warning "Dockerfile не найден. Пропуск сборки."
+fi
+echo ""
+
+# 13. Проверка статуса
+log_info "Проверка статуса бота..."
+sleep 3
+if docker ps | grep -q netcrazybot; then
+    log_success "Бот успешно запущен!"
+    echo ""
+    docker ps --filter name=netcrazybot --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+else
+    log_error "Бот не запущен. Проверьте логи: docker logs netcrazybot"
+fi
+echo ""
+
+# 14. Вывод информации
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_success "Установка завершена!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "📁 Директория бота: $BOT_DIR"
+echo "🔧 Конфигурация: $BOT_DIR/.env"
+echo "📋 Docker Compose: $BOT_DIR/docker-compose.yml"
+echo ""
+echo "🔍 Полезные команды:"
+echo "  • Просмотр логов:     docker logs -f netcrazybot"
+echo "  • Перезапуск бота:    docker restart netcrazybot"
+echo "  • Остановка бота:     docker stop netcrazybot"
+echo "  • Запуск бота:        docker start netcrazybot"
+echo "  • Пересборка:         cd $BOT_DIR && docker compose up -d --build"
+echo ""
+echo "📊 Статус контейнеров:"
+echo "  • Бот:                docker ps --filter name=netcrazybot"
+echo "  • AWG серверы:        docker ps --filter name=amnezia"
+echo ""
+echo "⚙️ Установка AWG серверов:"
+echo "  1. Откройте Telegram бота"
+echo "  2. Отправьте команду /admin"
+echo "  3. Выберите 'Установка'"
+echo "  4. Следуйте инструкциям"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Made with Bob
