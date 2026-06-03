@@ -182,6 +182,37 @@ async function removeServer(version) {
 }
 
 /**
+ * Установка wireguard-tools на хосте если не установлен
+ * @returns {Promise<void>}
+ */
+async function ensureWireguardTools() {
+    logger.info('[AWGInstaller] Проверка wireguard-tools на хосте...');
+    
+    try {
+        // Проверяем наличие wg на хосте
+        await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/which wg');
+        logger.info('[AWGInstaller] wireguard-tools уже установлен');
+        return;
+    } catch (error) {
+        logger.info('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
+        
+        try {
+            // Устанавливаем через nsenter с полными путями
+            await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/apt-get update -qq');
+            await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/apt-get install -y -qq wireguard-tools');
+            logger.info('[AWGInstaller] wireguard-tools успешно установлен');
+            
+            // Проверяем установку
+            await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/which wg');
+            logger.info('[AWGInstaller] Проверка установки: OK');
+        } catch (installError) {
+            logger.error(`[AWGInstaller] Ошибка установки: ${installError.message}`);
+            throw new Error(`Не удалось установить wireguard-tools: ${installError.message}`);
+        }
+    }
+}
+
+/**
  * Генерация серверных ключей на хосте через nsenter
  * @returns {Promise<Object>} Объект с ключами
  */
@@ -189,7 +220,10 @@ async function generateServerKeys() {
     logger.info('[AWGInstaller] Генерация ключей сервера на хосте...');
     
     try {
-        // Генерируем приватный ключ на хосте (wg должен быть установлен через install.sh)
+        // Убеждаемся что wireguard-tools установлен
+        await ensureWireguardTools();
+        
+        // Генерируем приватный ключ на хосте
         const { stdout: privateKey } = await execAsync('nsenter -t 1 -m -u -n -i /usr/bin/wg genkey');
         
         // Генерируем публичный ключ из приватного на хосте
