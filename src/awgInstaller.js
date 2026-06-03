@@ -182,6 +182,37 @@ async function removeServer(version) {
 }
 
 /**
+ * Установка необходимых пакетов на хосте
+ * @returns {Promise<void>}
+ */
+async function installRequiredPackages() {
+    logger.info('[AWGInstaller] Проверка необходимых пакетов...');
+    
+    try {
+        // Проверяем наличие wireguard-tools
+        try {
+            await execAsync('which wg');
+            logger.info('[AWGInstaller] wireguard-tools уже установлен');
+            return;
+        } catch (error) {
+            logger.info('[AWGInstaller] wireguard-tools не найден, устанавливаю...');
+        }
+        
+        // Устанавливаем wireguard-tools
+        await execAsync('apt-get update -qq && apt-get install -y -qq wireguard-tools');
+        logger.info('[AWGInstaller] wireguard-tools успешно установлен');
+        
+        // Проверяем установку
+        await execAsync('which wg');
+        logger.info('[AWGInstaller] Проверка установки wireguard-tools: OK');
+        
+    } catch (error) {
+        logger.error(`[AWGInstaller] Ошибка установки пакетов: ${error.message}`);
+        throw new Error(`Не удалось установить необходимые пакеты: ${error.message}`);
+    }
+}
+
+/**
  * Генерация серверных ключей
  * @returns {Promise<Object>} Объект с ключами
  */
@@ -189,12 +220,8 @@ async function generateServerKeys() {
     logger.info('[AWGInstaller] Генерация ключей сервера...');
     
     try {
-        // Проверяем наличие wireguard-tools
-        try {
-            await execAsync('which wg');
-        } catch (error) {
-            throw new Error('wireguard-tools не установлен. Установите: apt-get install wireguard-tools');
-        }
+        // Устанавливаем необходимые пакеты если их нет
+        await installRequiredPackages();
         
         // Генерируем приватный ключ
         const { stdout: privateKey } = await execAsync('wg genkey');
